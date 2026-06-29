@@ -1,0 +1,190 @@
+# docker-compose
+version: '3.8'
+name: booking-agent-system
+
+services:
+  redis_cache:
+    image: redis/redis-stack-server:latest
+    container_name: booking_redis
+    ports:
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - agent_network
+
+  rabbitmq_broker:
+    image: rabbitmq:3-management-alpine
+    container_name: booking_rabbitmq
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent_network
+
+  # 🚀 (Centralized Vector Database)
+  qdrant_server:
+    image: qdrant/qdrant:latest
+    container_name: booking_qdrant_server
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - agent_network
+
+  # ─── CONTAINER 1: FASTAPI REST & STREAM WEB SERVER ───
+  agent_api:
+    build: .
+    container_name: booking_api_server
+    command: ["./entrypoint.sh", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"   
+    volumes:
+      - ./:/app
+      - ${LOGS_DIR:-./logs}:/app/logs 
+    environment:
+      - REDIS_URL=redis://redis_cache:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
+      - QDRANT_SERVER_HOST=qdrant_server
+      - QDRANT_SERVER_PORT=6333
+    env_file:
+      - .env
+    depends_on:
+      redis_cache:
+        condition: service_healthy
+      rabbitmq_broker:
+        condition: service_healthy
+      qdrant_server:
+        condition: service_started
+    restart: always
+    networks:
+      - agent_network
+
+  # ─── CONTAINER 2: GRPC STREAMING ENGINE ───
+  agent_grpc:
+    build: .
+    container_name: booking_grpc_server
+    command: ["./entrypoint.sh", "python", "-m", "app.grpc_server"]
+    ports:
+      - "50051:50051" 
+      - "8002:8001"
+    volumes:
+      - ./:/app
+      - ${LOGS_DIR:-./logs}:/app/logs
+    environment:
+      - REDIS_URL=redis://redis_cache:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
+      - QDRANT_SERVER_HOST=qdrant_server
+      - QDRANT_SERVER_PORT=6333
+    env_file:
+      - .env
+    depends_on:
+      redis_cache:
+        condition: service_healthy
+      rabbitmq_broker:
+        condition: service_healthy
+      qdrant_server:
+        condition: service_started
+    restart: always
+    networks:
+      - agent_network
+
+  # ─── CONTAINER 3: ASYNC MEMORY EXTRACTION WORKER ───
+  memory_worker:
+    build: .
+    container_name: booking_memory_worker
+    command: ["./entrypoint.sh", "python", "-m", "app.worker_main"]
+    volumes:
+      - ./:/app
+      - ${LOGS_DIR:-./logs}:/app/logs
+    environment:
+      - REDIS_URL=redis://redis_cache:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
+      - QDRANT_SERVER_HOST=qdrant_server
+      - QDRANT_SERVER_PORT=6333
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq_broker:
+        condition: service_healthy
+      qdrant_server:
+        condition: service_started
+    restart: always
+    networks:
+      - agent_network
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-remote-write-receiver'
+      - '--enable-feature=native-histograms'
+    container_name: booking_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090" # Prometheus
+    restart: always
+    networks:
+      - agent_network
+
+  # 🚀  GRAFANA SERVER
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: booking_grafana
+    ports:
+      - "3001:3000" # Dashboard port 3001 (User/Pass: admin/admin)
+    volumes:
+      - grafana_storage:/var/lib/grafana
+    restart: always
+    networks:
+      - agent_network
+  
+  # 🚀 INTEGRATION: K6 LOAD TESTING ENGINE
+  k6_load_test:
+    image: grafana/k6:latest
+    container_name: booking_k6_runner
+    networks:
+      - agent_network
+    volumes:
+      - ./load_tests:/load_tests
+    environment:
+      # Configure k6 to push metrics to Prometheus using Remote Write
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+
+      # Export Trend metrics as native Prometheus histograms
+      - K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true
+
+    # Change the JavaScript file name according to the test scenario you want to run
+    command: run -o experimental-prometheus-rw /load_tests/${K6_SCRIPT}
+
+    depends_on:
+      agent_api:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+volumes:
+  qdrant_data:
+  grafana_storage:
+
+networks:
+  agent_network:
+    external: true 
