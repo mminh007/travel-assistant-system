@@ -1,0 +1,66 @@
+@{
+    ViewData["Title"] = "Search Flights";
+}
+
+<div class="position-relative text-white mb-5" style="background-color: #003b95; margin-left: -calc(var(--bs-gutter-x) * .5); margin-right: -calc(var(--bs-gutter-x) * .5); padding: 20px 0 60px 0;">
+    <div class="container">
+        <h2 class="fw-bold">Compare and book flights with ease</h2>
+        <p class="fs-5">Discover your next dream destination</p>
+    </div>
+</div>
+
+<div class="container">
+    @await Html.PartialAsync("Modules/FlightSearchBarModule")
+
+    <div class="row mt-5">
+        <!-- Sidebar for Flight Filters -->
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Filter by:</h5>
+                    
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Stops</h6>
+                        <div class="form-check">
+                            <input class="form-check-input flight-filter" type="checkbox" value="0" id="stopDirect" checked>
+                            <label class="form-check-label" for="stopDirect">Direct only</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input flight-filter" type="checkbox" value="1" id="stop1" checked>
+                            <label class="form-check-label" for="stop1">1 stop</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input flight-filter" type="checkbox" value="2" id="stop2" checked>
+                            <label class="form-check-label" for="stop2">2+ stops</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="fw-bold mb-0" id="flightResultCount">Searching for flights...</h3>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Sort by: Best
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Best</a></li>
+                        <li><a class="dropdown-item" href="#">Cheapest</a></li>
+                        <li><a class="dropdown-item" href="#">Fastest</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="flightListContainer">
+                <!-- Flight cards will be injected here via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/modules/SearchFlight.js" asp-append-version="true" defer></script>
+}

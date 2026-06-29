@@ -5,7 +5,7 @@ import tiktoken
 from typing import Dict, Any, List, Literal, Optional
 from pydantic import BaseModel, Field
 
-from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage
+from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -178,7 +178,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
     Acts as the project manager. Takes a complex travel query, evaluates feasibility,
     and breaks it down into a linear execution plan stored in Workflow Memory.
     """
-    user_initial_prompt = state["messages"][0].content if state["messages"] else ""
+    user_initial_prompt = state["messages"][-1].content if state["messages"] else ""
     objective = state.get("objective", user_initial_prompt)
     logger.info(f"==> [Planner] Breaking down travel request: '{user_initial_prompt[:50]}...'")
 
@@ -229,13 +229,25 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
         await container.initialize()
 
     user_initial_prompt = state["messages"][0].content if state["messages"] else ""
-    context = await container.hybrid_search.retrieve(user_id, user_initial_prompt, collection="travel_knowledge")
     manifest = load_agent_manifest_instructions()
     task_context = _build_task_context(state)
 
+    intent_category = state.get("intent_category", "travel_faq")
+
+    if intent_category == "hotel_booking":
+        intent_instructions = "Focus heavily on providing accurate dates, pricing, and precise location details for hotels."
+    elif intent_category == "flight_booking":
+        intent_instructions = "Ensure strict verification of origin, destination, travel dates, and passenger counts for flights."
+    elif intent_category == "itinerary_planning":
+        intent_instructions = "Provide logical sequential progression in the plans. Include estimated travel times and distances."
+    else:
+        intent_instructions = "Rely on the travel knowledge base for factual, up-to-date responses."
+
     system_content = (
         f"{manifest}\n\n"
-        "You are the TRAVEL_REACT_AGENT operating in a Reason-and-Act (ReAct) loop.\n"
+        f"You are the TRAVEL_REACT_AGENT operating in a Reason-and-Act (ReAct) loop.\n"
+        f"Current task intent: {intent_category.upper()}\n"
+        f"Directives: {intent_instructions}\n\n"
         "Follow this execution cycle:\n"
         "1. THOUGHT: Think step-by-step about the user's travel request and current state.\n"
         "2. ACTION: If you need external data (hotel info, flights), invoke the appropriate tool.\n"
@@ -249,18 +261,19 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     if task_context:
         system_content += f"<current_task>\n{task_context}\n</current_task>\n\n"
 
-    system_content += f"<travel_knowledge_base>\n{context}\n</travel_knowledge_base>"
-
     compiled_messages = [SystemMessage(content=system_content)]
     compiled_messages.extend(state["messages"])
 
     base_llm = get_llm_instance(2, config)
     llm_with_tools = get_cached_bound_llm("travel", base_llm)
 
+    from app.graph.config import _resolve_provider_and_key
+    provider, provider_cfg, _ = _resolve_provider_and_key(config)
+    
     compiled_messages = prune_messages_by_token_limit(
         compiled_messages,
-        settings.openai.max_context_tokens,
-        settings.openai.tier2_balanced_model
+        provider_cfg.max_context_tokens,
+        provider_cfg.tier2_balanced_model
     )
 
     current_iteration = state.get("iteration_count", 0) + 1
@@ -336,7 +349,7 @@ async def node_direct_executor_init(state: AgentState):
     Skips Planner to save LLM cost, creates a single synthetic task from the user prompt,
     and sets all required loop counters to their initial values.
     """
-    user_initial_prompt = state["messages"][0].content if state["messages"] else ""
+    user_initial_prompt = state["messages"][-1].content if state["messages"] else ""
     objective = state.get("objective", user_initial_prompt)
     tasks_state = [{"id": 1, "desc": objective, "status": "pending", "result": None, "findings": []}]
 
@@ -518,8 +531,15 @@ async def node_task_manager(state: AgentState):
 
     if next_task:
         logger.info(f"    Advancing to Next Task -> [{next_task['id']}]: {next_task['desc']}")
-        # Context Sandboxing: clear all messages except the original prompt
-        messages_to_remove = [RemoveMessage(id=m.id) for m in state["messages"][1:] if getattr(m, "id", None)]
+        # Context Sandboxing: clear execution messages generated during this task, 
+        # keeping the conversation history up to the latest user prompt
+        last_human_idx = len(state["messages"]) - 1
+        for i in range(len(state["messages"]) - 1, -1, -1):
+            if getattr(state["messages"][i], "type", "") == "human" or isinstance(state["messages"][i], HumanMessage):
+                last_human_idx = i
+                break
+                
+        messages_to_remove = [RemoveMessage(id=m.id) for m in state["messages"][last_human_idx+1:] if getattr(m, "id", None)]
 
         return {
             "tasks": updated_tasks,
@@ -537,4 +557,4 @@ async def node_task_manager(state: AgentState):
         return {
             "tasks": updated_tasks,
             "current_task_id": None
-        }
+        }

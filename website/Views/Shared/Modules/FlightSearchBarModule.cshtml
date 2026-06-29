@@ -1,0 +1,32 @@
+<form id="flightSearchForm" class="bg-warning p-2 rounded d-flex flex-wrap gap-2 shadow-sm align-items-center" style="margin-top: -45px; position: relative; z-index: 10;">
+    <div class="flex-grow-1 position-relative">
+        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-airplane-engines"></i></span>
+        <input type="text" id="originCode" class="form-control form-control-lg border-0 ps-5" placeholder="From (e.g. SGN)" name="origin" value="@ViewData["Origin"]" required>
+    </div>
+    
+    <div class="d-flex align-items-center">
+        <button type="button" class="btn btn-light rounded-circle shadow-sm" style="width: 40px; height: 40px; margin: 0 -10px; z-index: 5;"><i class="bi bi-arrow-left-right"></i></button>
+    </div>
+
+    <div class="flex-grow-1 position-relative">
+        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-geo-alt-fill"></i></span>
+        <input type="text" id="destinationCode" class="form-control form-control-lg border-0 ps-5" placeholder="To (e.g. HAN)" name="destination" value="@ViewData["Destination"]" required>
+    </div>
+
+    <div class="flex-grow-1 position-relative">
+        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-calendar-date"></i></span>
+        <input type="text" id="flightDatePicker" class="form-control form-control-lg border-0 ps-5" placeholder="Depart - Return" name="dates" required>
+        <!-- Store initial values in hidden inputs to pass to flatpickr -->
+        <input type="hidden" id="initDepDate" value="@ViewData["DepartureDate"]">
+        <input type="hidden" id="initRetDate" value="@ViewData["ReturnDate"]">
+    </div>
+
+    <div class="flex-grow-1 position-relative">
+        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-person-fill"></i></span>
+        <input type="number" id="adultCount" class="form-control form-control-lg border-0 ps-5" placeholder="Adults" name="adults" value="@ViewData["Adults"]" min="1" max="9" required>
+    </div>
+
+    <div>
+        <button type="submit" id="btnSearchFlight" class="btn btn-primary btn-lg fw-bold px-4">Search</button>
+    </div>
+</form>

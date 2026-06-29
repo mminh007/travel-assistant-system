@@ -6,16 +6,9 @@ from app.mcp.mcp_client import get_mcp_tools
 # Define tool boundaries for each agent domain.
 # When the system grows to 100+ tools, only this registry needs to be updated.
 AGENT_TOOL_REGISTRY = {
-    "general_memory": [
-        "calculate_execution_time",
-        "search_web"
-    ],
-    "research_papers": [
-        "search_web"
-        # Future additions: "arxiv_search", "read_pdf"
-    ],
-    "vision_detection": [
-        # Future additions: "ocr_extract", "analyze_bounding_box"
+    "travel": [
+        "search_web",
+        "search_hotel_database"
     ]
 }
 
@@ -28,11 +21,16 @@ def get_tools_by_domain(domain: str) -> List[BaseTool]:
     """
     # Fetch the master pre-loaded tools list from the client manager cache
     all_mcp_tools = get_mcp_tools()
+    
+    # Import local tools and combine them
+    from app.mcp.local_tools import LOCAL_TOOLS
+    combined_tools = all_mcp_tools + LOCAL_TOOLS
+    
     allowed_tool_names = AGENT_TOOL_REGISTRY.get(domain, [])
 
     # Map names directly to base tool schemas
     return [
-        tool for tool in all_mcp_tools
+        tool for tool in combined_tools
         if tool.name in allowed_tool_names
     ]
 

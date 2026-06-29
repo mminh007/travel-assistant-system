@@ -1,0 +1,45 @@
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="position-relative text-white mb-5" style="background-color: #003b95; margin-left: -calc(var(--bs-gutter-x) * .5); margin-right: -calc(var(--bs-gutter-x) * .5); padding: 50px 0 100px 0;">
+    <div class="container">
+        <h1 class="display-4 fw-bold">Find your next stay</h1>
+        <p class="fs-4">Search low prices on hotels, homes and much more...</p>
+    </div>
+</div>
+
+<div class="container">
+    @await Html.PartialAsync("Modules/SearchBarModule")
+
+    <div class="mt-5">
+        <h2 class="fw-bold mb-4">Trending destinations</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card bg-dark text-white border-0 shadow-sm overflow-hidden" style="height: 250px;">
+                    <img src="https://images.unsplash.com/photo-1583417319070-4a69db38a482?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="card-img opacity-75 h-100 object-fit-cover" alt="Nha Trang">
+                    <div class="card-img-overlay d-flex align-items-start">
+                        <h3 class="card-title fw-bold text-shadow">Nha Trang <img src="https://flagcdn.com/24x18/vn.png" alt="VN"></h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-dark text-white border-0 shadow-sm overflow-hidden" style="height: 250px;">
+                    <img src="https://images.unsplash.com/photo-1504214208698-ea1916a2195a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="card-img opacity-75 h-100 object-fit-cover" alt="Da Lat">
+                    <div class="card-img-overlay d-flex align-items-start">
+                        <h3 class="card-title fw-bold text-shadow">Da Lat <img src="https://flagcdn.com/24x18/vn.png" alt="VN"></h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    }
+    .object-fit-cover {
+        object-fit: cover;
+    }
+</style>

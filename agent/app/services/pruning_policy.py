@@ -9,7 +9,7 @@ def run_pruning_policy():
     client = QdrantClient(host=settings.qdrant.server_host, port=settings.qdrant.server_port)
     
     # 🚀 Track metrics across all distinct collection partitions deployed in production
-    target_collections = ["general_memory", "research_papers", "vision_detection"]
+    target_collections = ["travel_knowledge", "semantic_cache"]
     
     for col_name in target_collections:
         try:

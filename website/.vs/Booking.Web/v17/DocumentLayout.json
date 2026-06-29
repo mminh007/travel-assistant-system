@@ -1,0 +1,219 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\proj\\Booking\\website\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\services\\amadeusservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:services\\amadeusservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\controllers\\flightcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:controllers\\flightcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\models\\dtos\\flightdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:models\\dtos\\flightdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\models\\dtos\\paginatedresult.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:models\\dtos\\paginatedresult.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\views\\shared\\modules\\filtersearchmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:views\\shared\\modules\\filtersearchmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\views\\shared\\modules\\carditemlistmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:views\\shared\\modules\\carditemlistmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\controllers\\hotelcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:controllers\\hotelcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\views\\shared\\modules\\searchbarmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:views\\shared\\modules\\searchbarmodule.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|d:\\proj\\booking\\website\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2637874C-7833-5952-0FD4-DF0422630A31}|Booking.Web.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 1,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedHeight": 329,
+          "SelectedChildIndex": 9,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:134:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:135:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:136:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:140:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:2131967604:0:{83107a3e-496a-485e-b455-16ddb978e55e}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1725747140:0:{83107a3e-496a-485e-b455-16ddb978e55e}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "AmadeusService.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Services\\AmadeusService.cs",
+              "RelativeDocumentMoniker": "Services\\AmadeusService.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Services\\AmadeusService.cs",
+              "RelativeToolTip": "Services\\AmadeusService.cs",
+              "ViewState": "AgIAAJQAAAAAAAAAAAAowKsAAABAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T10:23:45.139Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "PaginatedResult.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Models\\DTOs\\PaginatedResult.cs",
+              "RelativeDocumentMoniker": "Models\\DTOs\\PaginatedResult.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Models\\DTOs\\PaginatedResult.cs",
+              "RelativeToolTip": "Models\\DTOs\\PaginatedResult.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T09:52:05.18Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "FlightDto.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Models\\DTOs\\FlightDto.cs",
+              "RelativeDocumentMoniker": "Models\\DTOs\\FlightDto.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Models\\DTOs\\FlightDto.cs",
+              "RelativeToolTip": "Models\\DTOs\\FlightDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAqwBAAAAAmAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T09:51:08.523Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "FlightController.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Controllers\\FlightController.cs",
+              "RelativeDocumentMoniker": "Controllers\\FlightController.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Controllers\\FlightController.cs",
+              "RelativeToolTip": "Controllers\\FlightController.cs",
+              "ViewState": "AgIAABAAAAAAAAAAAAAgwCgAAAA6AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T09:50:58.128Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "FilterSearchModule.cshtml",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\FilterSearchModule.cshtml",
+              "RelativeDocumentMoniker": "Views\\Shared\\Modules\\FilterSearchModule.cshtml",
+              "ToolTip": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\FilterSearchModule.cshtml",
+              "RelativeToolTip": "Views\\Shared\\Modules\\FilterSearchModule.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAABOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-29T09:03:41.329Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "SearchBarModule.cshtml",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\SearchBarModule.cshtml",
+              "RelativeDocumentMoniker": "Views\\Shared\\Modules\\SearchBarModule.cshtml",
+              "ToolTip": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\SearchBarModule.cshtml",
+              "RelativeToolTip": "Views\\Shared\\Modules\\SearchBarModule.cshtml",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAwwBoAAABvAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-29T07:58:58.775Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "HotelController.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Controllers\\HotelController.cs",
+              "RelativeDocumentMoniker": "Controllers\\HotelController.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Controllers\\HotelController.cs",
+              "RelativeToolTip": "Controllers\\HotelController.cs",
+              "ViewState": "AgIAAAUAAAAAAAAAAAAowBgAAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T07:43:51.155Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "D:\\proj\\Booking\\website\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAQAAAAAAAAAAAAiwFEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-29T07:21:37.027Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "CardItemListModule.cshtml",
+              "DocumentMoniker": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\CardItemListModule.cshtml",
+              "RelativeDocumentMoniker": "Views\\Shared\\Modules\\CardItemListModule.cshtml",
+              "ToolTip": "D:\\proj\\Booking\\website\\Views\\Shared\\Modules\\CardItemListModule.cshtml",
+              "RelativeToolTip": "Views\\Shared\\Modules\\CardItemListModule.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-06-29T08:49:56.58Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedHeight": 71,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

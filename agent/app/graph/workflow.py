@@ -71,20 +71,8 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("out_of_domain", END)
 
-def route_from_planner(state: AgentState) -> str:
-    """Always delegates to the travel react agent."""
-    return "travel_react_agent"
-
-workflow.add_conditional_edges(
-    "planner",
-    route_from_planner,
-    {"travel_react_agent": "travel_react_agent"}
-)
-workflow.add_conditional_edges(
-    "direct_executor_init",
-    route_from_planner,
-    {"travel_react_agent": "travel_react_agent"}
-)
+workflow.add_edge("planner", "travel_react_agent")
+workflow.add_edge("direct_executor_init", "travel_react_agent")
 
 # ─── PHASE 2: CONFIGURABLE HARD LIMITS ───
 MAX_ITERATIONS   = 8    # Prevent infinite Thought/Action loops within a single task

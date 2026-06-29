@@ -1,0 +1,38 @@
+@model IEnumerable<Booking.Web.Models.Domain.Hotel>
+
+@{
+    ViewData["Title"] = "Search Results";
+}
+
+<div class="bg-primary pt-3 pb-5 mb-5" style="margin-top: -16px; margin-left: -calc(var(--bs-gutter-x) * .5); margin-right: -calc(var(--bs-gutter-x) * .5);">
+    <div class="container mt-2">
+        @await Html.PartialAsync("Modules/SearchBarModule")
+    </div>
+</div>
+
+<div class="container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="#">Vietnam</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Search Results</li>
+        </ol>
+    </nav>
+
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <!-- Filter Sidebar -->
+            <div class="position-sticky" style="top: 20px;">
+                @await Html.PartialAsync("Modules/FilterSearchModule")
+            </div>
+        </div>
+        <div class="col-md-9">
+            <!-- Hotel List -->
+            @await Html.PartialAsync("Modules/CardItemListModule", Model)
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/modules/SearchHotel.js" asp-append-version="true" defer></script>
+}

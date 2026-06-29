@@ -38,3 +38,6 @@ class AgentState(TypedDict):
     # Decouples task_manager from fragile JSON parsing of executor message content.
     raw_executor_output: Optional[str]      # Plain-text result summary extracted from executor output
     extracted_findings: List[Dict[str, Any]] # Structured List[Finding] dicts from the extractor
+
+    # ─── CACHING ───
+    cache_hit: Optional[bool]

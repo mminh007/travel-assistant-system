@@ -86,7 +86,8 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
             "messages": [HumanMessage(content=request.prompt)],
             "user_id": request.user_id,
             "session_id": request.session_id,
-            "current_domain": "general_memory",  # Fallback seed; Supervisor will override
+            "current_domain": "travel",  # Fallback seed; Supervisor will override
+            "cache_hit": False,
             # ─── Supervisor routing metadata ───
             "complexity": "medium",               # Default; Supervisor will override
             "required_agents": [],
@@ -137,7 +138,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
 
         final_state_messages = []
         ai_full_response_text = ""
-        resolved_routing_domain = "general_memory"
+        resolved_routing_domain = "travel"
         
         is_anonymous = request.user_id.startswith("anon_")
 
@@ -164,7 +165,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]
                     # 🚀 Intercept the terminal state domain configuration generated dynamically by the Supervisor
-                    resolved_routing_domain = output_payload.get("current_domain", "general_memory")
+                    resolved_routing_domain = output_payload.get("current_domain", "travel")
 
         try:
             if is_anonymous:
