@@ -4,13 +4,15 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="fw-bold mb-0">Nha Trang: @Model.Count() properties found</h3>
         <div class="dropdown">
-            <button class="btn btn-outline-secondary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                Sort by: Top picks for long stays
+            <button id="sortByBtn" class="btn btn-outline-secondary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Sort by: <span id="sortByLabel">Price (lowest first)</span>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="#">Price (lowest first)</a></li>
-                <li><a class="dropdown-item" href="#">Star rating (highest first)</a></li>
-                <li><a class="dropdown-item" href="#">Distance from center</a></li>
+            <ul class="dropdown-menu dropdown-menu-end" id="sortByMenu">
+                <li><a class="dropdown-item active" href="#" data-sort="price_asc">Price (lowest first)</a></li>
+                <li><a class="dropdown-item" href="#" data-sort="price_desc">Price (highest first)</a></li>
+                <li><a class="dropdown-item" href="#" data-sort="star_desc">Star rating (highest first)</a></li>
+                <li><a class="dropdown-item" href="#" data-sort="star_asc">Star rating (lowest first)</a></li>
+                <li><a class="dropdown-item" href="#" data-sort="name_asc">Name (A–Z)</a></li>
             </ul>
         </div>
     </div>

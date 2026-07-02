@@ -11,7 +11,7 @@ async def get_agent_graph()-> AsyncGenerator:
     This lifecycle isolate allows easy mock injections during automated unit tests.
     """
     async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-        runtime_graph = compiled_graph.compile(checkpointer=saver)
+        runtime_graph = compiled_graph.compile(checkpointer=saver,name="compiled_graph")
         yield runtime_graph
 
 

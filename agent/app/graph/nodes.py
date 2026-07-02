@@ -16,7 +16,7 @@ from app.core.settings import settings
 from app.core.logger import setup_app_logger
 from app.core.metrics import GRAPH_ITERATIONS
 from app.bootstrap.container import container
-from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_instance
+from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_instance, invoke_llm_with_limit
 
 logger = setup_app_logger("CognitiveNodes")
 
@@ -28,6 +28,7 @@ class InputGuardrailOutput(BaseModel):
     intent_category: Literal["hotel_booking", "flight_booking", "travel_faq", "itinerary_planning", "out_of_domain"] = Field(description="The category of the user's request.")
     complexity: str = Field(description="Level of complexity: 'low', 'medium', 'high'.")
     objective: str = Field(description="The overarching execution objective for the Planner.")
+    detected_language: str = Field(description="The detected language of the user's prompt (e.g., 'English', 'Vietnamese', 'Spanish').")
     rationale: str = Field(description="Internal chain-of-thought justification.")
 
 class TaskItem(BaseModel):
@@ -51,15 +52,13 @@ class ExecutorOutput(BaseModel):
     result_summary: str = Field(description="A concise 1-3 sentence summary of the main answer or result.")
     findings: List[Finding] = Field(description="Key factual findings extracted from the executor's response.")
 
-class CriticOutput(BaseModel):
+class EvaluatorOutput(BaseModel):
     objective_met: bool = Field(description="Assess if the executor fully achieved the initial objective.")
     tool_quality_score: int = Field(description="Score (1-10) evaluating the appropriate use of tools and context.")
     evidence_quality_score: int = Field(description="Score (1-10) evaluating the strength of evidence supporting the findings.")
     citation_quality_score: int = Field(description="Score (1-10) evaluating proper source citations.")
     freshness_score: int = Field(description="Score (1-10) evaluating the recency/freshness of the information.")
     feedback: str = Field(description="Detailed feedback synthesizing the evaluations into a final verdict.")
-
-class ReflectionOutput(BaseModel):
     needs_rework: bool = Field(description="Determine if the executor needs to rerun based on the critic's severity.")
     actionable_advice: str = Field(description="Strict, actionable instructions for the executor or synthesis notes if passing.")
 
@@ -118,14 +117,14 @@ def _build_task_context(state: AgentState) -> str:
 
 
 @functools.lru_cache(maxsize=1)
-def load_agent_manifest_instructions(file_path: str = "AGENTS.md") -> str:
+def load_agent_manifest_instructions(file_path: str = "workflow.md") -> str:
     """
     Extracts baseline operational principles from the external Markdown manifest.
     Cached after first read — manifest is static for the lifetime of the process.
     """
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
-            logger.info("==> [Manifest] Loaded AGENTS.md into cache.")
+            logger.info("==> [Manifest] Loaded workflow.md into cache.")
             return f.read()
     return "You are a highly capable engineering AI assistant."
 
@@ -141,10 +140,10 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
 
     try:
         structured_llm = get_structured_llm(1, InputGuardrailOutput, config)
-        decision: InputGuardrailOutput = await structured_llm.ainvoke([
+        decision: InputGuardrailOutput = await invoke_llm_with_limit(1, structured_llm, [
             SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request?"),
             HumanMessage(content=user_latest_message)
-        ])
+        ], config)
         logger.info(f"\n\n==> [PROCESS] INPUT_GUARDRAIL Initializing...")
         logger.info(f"    In Domain: [{decision.is_in_domain}] | Intent: {decision.intent_category.upper()} | Complexity: {decision.complexity.upper()}")
         logger.info(f"    Objective: {decision.objective}\n")
@@ -154,21 +153,24 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
                 "is_in_domain": False,
                 "intent_category": "out_of_domain",
                 "complexity": "low",
-                "objective": "Decline request politely"
+                "objective": "Decline request politely",
+                "detected_language": decision.detected_language
             }
 
         return {
             "is_in_domain": decision.is_in_domain,
             "intent_category": decision.intent_category,
             "complexity": decision.complexity,
-            "objective": decision.objective
+            "objective": decision.objective,
+            "detected_language": decision.detected_language
         }
     except Exception as route_err:
         logger.error(f"❌ [GUARDRAIL FAILURE] Defaulting to travel framework -> Trace: {str(route_err)}")
         return {
             "is_in_domain": True,
             "intent_category": "travel_faq",
-            "complexity": "low"
+            "complexity": "low",
+            "detected_language": "English"
         }
 
 
@@ -184,7 +186,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
 
     try:
         structured_planner_llm = get_structured_llm(2, PlannerOutput, config)
-        plan: PlannerOutput = await structured_planner_llm.ainvoke([
+        plan: PlannerOutput = await invoke_llm_with_limit(2, structured_planner_llm, [
             SystemMessage(
                 content=(
                     "You are the Travel Master Planner. Break down the user's travel request into 2-4 "
@@ -195,7 +197,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
                 )
             ),
             HumanMessage(content=user_initial_prompt)
-        ])
+        ], config)
 
         tasks_state = [
             {"id": t.id, "desc": t.description, "status": "pending", "result": None, "findings": []}
@@ -278,7 +280,7 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     current_iteration = state.get("iteration_count", 0) + 1
 
-    response = await llm_with_tools.ainvoke(compiled_messages)
+    response = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config)
     return {
         "messages": [response],
         "iteration_count": current_iteration
@@ -290,7 +292,7 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
     Node: FINDING_EXTRACTOR.
 
     PURPOSE — Separation of Content Generation from Information Extraction:
-    Executor nodes (general_agent, research_paper_agent, vision_detection_agent) now
+    Executor nodes (travel_react_agent) now
     produce free-form Markdown responses. This node reads that plain text and applies
     a dedicated, low-cost Tier-1 structured-output call to extract:
       - result_summary: a concise 1-3 sentence digest of the executor's answer
@@ -325,9 +327,9 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
     try:
         # Tier 1 (fast/cheap model) is sufficient — extraction is a short, focused call
         structured_extractor = get_structured_llm(1, ExecutorOutput, config)
-        extraction: ExecutorOutput = await structured_extractor.ainvoke([
+        extraction: ExecutorOutput = await invoke_llm_with_limit(1, structured_extractor, [
             HumanMessage(content=extraction_prompt)
-        ])
+        ], config)
         raw_summary = extraction.result_summary
         findings = [f.model_dump() for f in extraction.findings]
         logger.info(f"    Extracted {len(findings)} finding(s). Summary: '{raw_summary[:80]}...'")
@@ -367,87 +369,57 @@ async def node_direct_executor_init(state: AgentState):
 
 # ─── EVALUATION NODES ───
 
-async def node_critic_agent(state: AgentState, config: RunnableConfig = None):
+async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None):
     """
-    Node: CRITIC_AGENT. Evaluates executor output against the overarching objective.
-    Reads from state['raw_executor_output'] and state['extracted_findings'] as set
-    by node_finding_extractor — no message parsing required here.
+    Node: EVALUATOR_AGENT. Replaces both critic_agent and reflection_agent.
+    Evaluates executor output against the overarching objective and decides if rework is needed.
     """
-    logger.info(f"\n\n==> [PROCESS] CRITIC_AGENT Auditing execution trajectory...")
+    logger.info(f"\n\n==> [PROCESS] EVALUATOR_AGENT Auditing execution trajectory...")
 
     objective = state.get("objective", "Provide a comprehensive answer.")
-    # Read clean plain-text payload from state (set by node_finding_extractor)
     executor_payload = state.get("raw_executor_output") or state["messages"][-1].content
     findings = state.get("extracted_findings", [])
     action_history = state.get("action_history", [])
+    current_rework_count = state.get("rework_count", 0)
 
     evaluation_prompt = (
-        f"You are the strict CRITIC_AGENT.\n"
+        f"You are the EVALUATOR_AGENT.\n"
         f"MASTER OBJECTIVE: {objective}\n\n"
         f"Critically analyze if the Executor fulfilled the objective.\n"
         f"Provide integer scores (1-10) for tool_quality_score, evidence_quality_score, "
         f"citation_quality_score, and freshness_score.\n"
-        f"Expose missing data or hallucinated parameters in your feedback.\n\n"
+        f"Expose missing data or hallucinated parameters in your feedback.\n"
+        f"Determine if rework is absolutely required. If yes, generate strict actionable instructions. "
+        f"If no, draft a synthesis memo.\n\n"
         f"<executor_payload>\n{executor_payload}\n</executor_payload>\n\n"
         f"<extracted_findings>\n{findings}\n</extracted_findings>\n\n"
         f"<action_history>\n{action_history}\n</action_history>"
     )
 
     try:
-        structured_critic_llm = get_structured_llm(2, CriticOutput, config)
-        evaluation: CriticOutput = await structured_critic_llm.ainvoke([HumanMessage(content=evaluation_prompt)])
+        structured_evaluator_llm = get_structured_llm(2, EvaluatorOutput, config)
+        evaluation: EvaluatorOutput = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config)
     except Exception as e:
-        logger.error(f"❌ [CRITIC FAILURE] Parse error: {str(e)}")
-        evaluation = CriticOutput(
+        logger.error(f"❌ [EVALUATOR FAILURE] Parse error: {str(e)}")
+        evaluation = EvaluatorOutput(
             objective_met=True,
             tool_quality_score=5, evidence_quality_score=5, citation_quality_score=5, freshness_score=5,
-            feedback="[Fallback] Parsing failed, proceeding automatically."
+            feedback="[Fallback] Parsing failed, proceeding automatically.",
+            needs_rework=False, actionable_advice="[Fallback] Proceeding without rework."
         )
+
+    new_rework_count = current_rework_count + 1 if evaluation.needs_rework else current_rework_count
 
     logger.info(f"    Status: {'✅ MET' if evaluation.objective_met else '❌ DEFICIENT'}")
     logger.info(f"    Scores: Tools={evaluation.tool_quality_score}, Evidence={evaluation.evidence_quality_score}, "
                 f"Citations={evaluation.citation_quality_score}, Freshness={evaluation.freshness_score}")
-    logger.info(f"    Feedback: {evaluation.feedback}\n")
-
-    return {"critic_feedback": evaluation.feedback}
-
-
-async def node_reflection_agent(state: AgentState, config: RunnableConfig = None):
-    """
-    Node: REFLECTION_AGENT. Synthesizes critic feedback into actionable directives.
-    Increments rework_count when a rework cycle is approved, enabling the bounded
-    rework safeguard in route_from_reflection().
-    """
-    logger.info(f"\n\n==> [PROCESS] REFLECTION_AGENT Formulating operational reflection...")
-
-    critic_feedback = state.get("critic_feedback", "No anomalies detected.")
-    executor_payload = state.get("raw_executor_output") or state["messages"][-1].content
-    current_rework_count = state.get("rework_count", 0)
-
-    reflection_prompt = (
-        f"You are the REFLECTION_AGENT.\n"
-        f"Determine if rework is absolutely required. If yes, generate strict instructions. "
-        f"If no, draft a synthesis memo.\n\n"
-        f"<critic_audit>\n{critic_feedback}\n</critic_audit>\n\n"
-        f"<executor_payload>\n{executor_payload}\n</executor_payload>"
-    )
-
-    try:
-        structured_reflection_llm = get_structured_llm(2, ReflectionOutput, config)
-        reflection: ReflectionOutput = await structured_reflection_llm.ainvoke([HumanMessage(content=reflection_prompt)])
-    except Exception as e:
-        logger.error(f"❌ [REFLECTION FAILURE] Parse error: {str(e)}")
-        reflection = ReflectionOutput(needs_rework=False, actionable_advice="[Fallback] Parsing failed, proceeding without rework.")
-
-    # Increment rework_count only when a rework cycle is actually triggered
-    new_rework_count = current_rework_count + 1 if reflection.needs_rework else current_rework_count
-
-    logger.info(f"    Correction Required: {reflection.needs_rework} | Rework Cycle: {new_rework_count}")
-    logger.info(f"    Directive: {reflection.actionable_advice}\n")
+    logger.info(f"    Correction Required: {evaluation.needs_rework} | Rework Cycle: {new_rework_count}")
+    logger.info(f"    Directive: {evaluation.actionable_advice}\n")
 
     return {
-        "reflection_notes": reflection.actionable_advice,
-        "needs_rework": reflection.needs_rework,
+        "evaluator_feedback": evaluation.feedback,
+        "evaluator_notes": evaluation.actionable_advice,
+        "needs_rework": evaluation.needs_rework,
         "rework_count": new_rework_count
     }
 
@@ -460,6 +432,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
     logger.info(f"\n\n==> [PROCESS] FINAL_SYNTHESIZER Constructing final payload...")
 
     current_objective = state.get("objective", state["messages"][-1].content if state["messages"] else "")
+    detected_language = state.get("detected_language", "English")
     tasks = state.get("tasks", [])
 
     all_findings = []
@@ -478,6 +451,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
     synthesis_prompt = (
         "You are the FINAL_SYNTHESIZER. Create a highly polished, professional Markdown response "
         "that directly addresses the user's request.\n"
+        f"CRITICAL RULE: You MUST output your final response entirely in the following language: {detected_language}\n"
         "Synthesize the outputs from the completed tasks into a coherent and unified answer. "
         "Do not artificially separate the response into 'Key Findings' and 'Detailed Analysis' unless appropriate.\n"
         "Extract, deduplicate, and compile any sources/citations into a 'Bibliography' at the end if applicable.\n\n"
@@ -486,7 +460,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         f"<task_results>\n{results_text}\n</task_results>\n"
     )
 
-    final_response = await get_llm_instance(2, config).ainvoke([HumanMessage(content=synthesis_prompt)])
+    final_response = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config)
 
     total_iterations = state.get("iteration_count", 0)
     GRAPH_ITERATIONS.labels(domain=state.get("current_domain", "general_memory")).observe(total_iterations)
@@ -557,4 +531,4 @@ async def node_task_manager(state: AgentState):
         return {
             "tasks": updated_tasks,
             "current_task_id": None
-        }
+        }

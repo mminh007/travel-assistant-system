@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Booking.Web.Models.ViewModels;
-using Booking.Web.Services;
+using Booking.Web.Services.Interfaces;
 
 namespace Booking.Web.Controllers
 {

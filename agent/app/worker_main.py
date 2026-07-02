@@ -59,7 +59,17 @@ async def main():
     
     await container.initialize()
 
-    connection = await aio_pika.connect_robust(settings.rabbitmq.url)
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            connection = await aio_pika.connect_robust(settings.rabbitmq.url)
+            break
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.error(f"❌ Failed to connect to RabbitMQ after {max_retries} attempts: {e}")
+                raise
+            logger.warning(f"⚠️ Failed to connect to RabbitMQ (attempt {attempt + 1}/{max_retries}), retrying in 5s... {e}")
+            await asyncio.sleep(5)
     
     async with connection:
         channel = await connection.channel()

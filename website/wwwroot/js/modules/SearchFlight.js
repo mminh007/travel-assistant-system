@@ -16,6 +16,8 @@ $(document).ready(function () {
         defaultDate: defaultDates
     });
 
+    let currentFlightSort = 'best';
+
     function fetchFlights() {
         const origin = $('#originCode').val().toUpperCase();
         const destination = $('#destinationCode').val().toUpperCase();
@@ -49,7 +51,8 @@ $(document).ready(function () {
             departureDate: depDate,
             returnDate: retDate,
             adults: adults,
-            max: 30
+            max: 30,
+            sortBy: currentFlightSort
         };
 
         $('#flightListContainer').html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 text-muted">Searching for flights via Amadeus...</p></div>');
@@ -209,17 +212,35 @@ $(document).ready(function () {
         fetchFlights();
     });
 
+    // Sort By Dropdown
+    $(document).on('click', '#flightSortMenu .dropdown-item', function (e) {
+        e.preventDefault();
+        const sortVal = $(this).data('sort');
+        const sortLabel = $(this).text();
+
+        // Update active state
+        $('#flightSortMenu .dropdown-item').removeClass('active');
+        $(this).addClass('active');
+
+        // Update button label
+        $('#flightSortLabel').text(sortLabel);
+
+        // Update sort state and re-fetch
+        currentFlightSort = sortVal;
+        fetchFlights();
+    });
+
     // Add CSS rule dynamically for hover effect
-    if (!document.getElementById('flightCardStyle')) {
-        const style = document.createElement('style');
-        style.id = 'flightCardStyle';
-        style.innerHTML = `
+    if (!$('#flightCardStyle').length) {
+        $('<style>')
+            .attr('id', 'flightCardStyle')
+            .html(`
             .flight-card-anim { transition: box-shadow 0.2s, border-color 0.2s; border: 1px solid #e7e7e7; }
             .flight-card-anim:hover { box-shadow: 0 4px 12px rgba(0,0,0,.15)!important; border-color: #0071c2 !important; cursor: pointer; }
             .flight-card-anim .btn { transition: background-color 0.2s; }
             .flight-card-anim:hover .btn { background-color: #005a9e !important; }
-        `;
-        document.head.appendChild(style);
+        `)
+            .appendTo('head');
     }
 
     // Initial load

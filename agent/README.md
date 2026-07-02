@@ -49,7 +49,7 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 - **LLM Tier:** Tier 1 (fast)
 - **Output Schema:** `SupervisorRouterOutput` (Pydantic, structured output)
 - **Writes to State:** `current_domain`, `complexity`, `required_agents`, `objective`
-- **Description:** The graph entry point. Reads the latest user message and outputs a structured routing decision. Assigns the correct domain (`general_memory`, `research_papers`, or `vision_detection`) with strict semantic rules to prevent hallucinated routing (e.g., preventing "forecast research" from being sent to `research_papers`).
+- **Description:** The graph entry point. Reads the latest user message and outputs a structured routing decision. Assigns the correct domain (`travel_react_agent`) with strict semantic rules to prevent hallucinated routing.
 
 ---
 
@@ -74,24 +74,11 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 
 All three executor nodes follow the same **Reason → Action → Observation → Evaluate** cycle, and all produce **free-form Markdown output**. They never request JSON formatting — that responsibility belongs entirely to `finding_extractor`.
 
-#### `general_memory`
+#### `travel_react_agent`
 - **LLM Tier:** Tier 2 (balanced)
 - **Domain:** General-purpose — web searches, itineraries, coding, weather, standard Q&A
 - **Tools:** Full MCP tool suite bound via `get_cached_bound_llm()`
-- **RAG Context:** Retrieved from `general_memory` Qdrant collection via `HybridRetriever`
-
-#### `research_papers`
-- **LLM Tier:** Tier 3 (high-reasoning)
-- **Domain:** STRICTLY academic literature, scientific PDFs, complex analysis
-- **Tools:** Full MCP tool suite
-- **RAG Context:** Retrieved from `research_papers` Qdrant collection using a query-transformed, optimized search query
-- **Special Logic:** Applies "Critic Before Tool" heuristic in system prompt — the LLM must internally justify why a tool is needed before calling it.
-
-#### `vision_detection`
-- **LLM Tier:** Tier 1 (fast)
-- **Domain:** STRICTLY image processing, YOLO models, bounding box configurations
-- **Tools:** Vision-specific MCP tools
-- **RAG Context:** Retrieved from `vision_detection` Qdrant collection
+- **RAG Context:** Retrieved from `travel_react_agent` Qdrant collection via `HybridRetriever`
 
 ---
 
@@ -171,15 +158,11 @@ flowchart TD
     DEI -- "current_domain" --> EX_ROUTER
 
     EX_ROUTER{{"🗺️ Route to Domain\nroute_from_planner()"}}
-    EX_ROUTER -- "general_memory" --> GM
-    EX_ROUTER -- "research_papers" --> RP
-    EX_ROUTER -- "vision_detection" --> VD
+    EX_ROUTER -- "travel_react_agent" --> GM
 
     subgraph PHASE2["⬛ Phase 2 — Execution ReAct Loop"]
         direction TB
-        GM["💡 general_memory\nTier 2 · Web, Coding, Planning\nOutputs: plain Markdown"]
-        RP["🔬 research_papers\nTier 3 · Academic PDFs\nOutputs: plain Markdown"]
-        VD["👁️ vision_detection\nTier 1 · YOLO, Images\nOutputs: plain Markdown"]
+        GM["💡 travel_react_agent\nTier 2 · Web, Coding, Planning\nOutputs: plain Markdown"]
 
         AT["📝 action_tracker\nHashes tool calls\nIncrements counters"]
         TOOLS["🔧 tools\nLangChain ToolNode\nMCP Tool Execution"]
@@ -228,13 +211,10 @@ flowchart TD
 |---|---|---|---|
 | `route_from_supervisor` | `supervisor_router` | `complexity == 'low'` | `direct_executor_init` |
 | | | `complexity != 'low'` | `planner` |
-| `route_from_planner` | `planner`, `direct_executor_init` | `tasks[0].target_agent` | `general_memory` / `research_papers` / `vision_detection` |
-| `evaluate_tool_hooks` | `general_memory`, `research_papers`, `vision_detection` | No tool calls | `finding_extractor` |
 | | | `iteration_count >= 8` | `finding_extractor` (forced) |
 | | | `tool_call_count >= 10` | `finding_extractor` (forced) |
 | | | Duplicate action detected | `finding_extractor` (forced) |
 | | | Valid tool call | `action_tracker` |
-| `route_back_to_agent` | `tools` | `current_domain` value | `general_memory` / `research_papers` / `vision_detection` |
 | `route_from_reflection` | `reflection_agent` | `needs_rework=True` AND `rework_count < 2` | Domain Executor (rework) |
 | | | `needs_rework=False` OR `rework_count >= 2` | `task_manager` |
 | `route_from_task_manager` | `task_manager` | `current_task_id is not None` | Domain Executor (next task) |
@@ -259,9 +239,7 @@ All safeguards are enforced in `evaluate_tool_hooks` and `route_from_reflection`
 
 | Tier | Usage | OpenAI Model | Claude Model |
 |---|---|---|---|
-| Tier 1 (Fast) | `supervisor_router`, `finding_extractor`, `vision_detection` | `tier1_fast_model` | `tier1_fast_model` |
-| Tier 2 (Balanced) | `planner`, `general_memory`, `critic_agent`, `reflection_agent`, `final_synthesizer` | `tier2_balanced_model` | `tier2_balanced_model` |
-| Tier 3 (Reasoning) | `research_papers` | `tier3_reasoning_model` | `tier3_reasoning_model` |
+| Tier 2 (Balanced) | `planner`, `travel_react_agent`, `critic_agent`, `reflection_agent`, `final_synthesizer` | `tier2_balanced_model` | `tier2_balanced_model` |
 
 > Tier assignments are resolved from `settings.py` — never hardcoded in node logic. Changing a model in `.env` automatically propagates to all nodes using that tier.
 

@@ -58,6 +58,111 @@
             &copy; 2026 - Booking.Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
+
+    @if (User.Identity != null && User.Identity.IsAuthenticated)
+    {
+        <div id="chat-widget" style="position:fixed;bottom:20px;right:20px;z-index:1000;">
+            <button id="chat-widget-toggle" class="btn btn-primary rounded-circle shadow d-flex align-items-center justify-content-center" style="width:60px;height:60px;">
+                <i class="bi bi-chat-dots fs-3"></i>
+            </button>
+            <div id="chat-widget-window" class="card shadow border-0" style="display:none;flex-direction:column;width:380px;height:550px;position:absolute;bottom:75px;right:0;border-radius:15px;overflow:hidden;">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" style="border-bottom:none;flex-shrink:0;">
+                    <span class="fw-semibold"><i class="bi bi-robot me-2"></i>TravelAI Assistant</span>
+                    <button id="chat-widget-close" class="btn-close btn-close-white" aria-label="Close"></button>
+                </div>
+                <div id="chat-messages" class="card-body bg-light" style="flex:1;display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;">
+                    <!-- Messages will appear here -->
+                    <div class="p-2 rounded align-self-start text-dark bg-white shadow-sm" style="max-width:85%; border: 1px solid #dee2e6;">
+                        Xin chào! Mình là TravelAI Assistant. Mình có thể giúp gì cho chuyến đi của bạn?
+                    </div>
+                </div>
+                <div class="card-footer bg-white" style="flex-shrink:0;">
+                    <div class="input-group">
+                        <input type="text" id="chat-input" class="form-control" placeholder="Hỏi AI..." style="border-radius:20px 0 0 20px;" />
+                        <button id="chat-send" class="btn btn-primary" style="border-radius:0 20px 20px 0;"><i class="bi bi-send"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <style>
+            #chat-messages::-webkit-scrollbar { width: 6px; }
+            #chat-messages::-webkit-scrollbar-track { background: #f1f1f1; }
+            #chat-messages::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+            #chat-messages::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        </style>
+        <script>
+            $(document).ready(function () {
+                var $toggleBtn = $('#chat-widget-toggle');
+                var $closeBtn = $('#chat-widget-close');
+                var $chatWindow = $('#chat-widget-window');
+                var $chatMessages = $('#chat-messages');
+                var $chatInput = $('#chat-input');
+                var $chatSend = $('#chat-send');
+
+                $toggleBtn.on('click', function () {
+                    $chatWindow.css('display', $chatWindow.css('display') === 'none' ? 'flex' : 'none');
+                });
+                $closeBtn.on('click', function () {
+                    $chatWindow.css('display', 'none');
+                });
+
+                var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+                var $currentMessageElement = null;
+                var currentMessageContent = "";
+
+                connection.on("ReceiveMessageChunk", function (chunk) {
+                    if (!$currentMessageElement) {
+                        $currentMessageElement = $('<div>')
+                            .addClass("p-2 rounded align-self-start text-dark bg-white shadow-sm")
+                            .css({
+                                "max-width": "85%",
+                                "border": "1px solid #dee2e6"
+                            });
+                        $chatMessages.append($currentMessageElement);
+                    }
+                    currentMessageContent += chunk;
+                    $currentMessageElement.html(marked.parse(currentMessageContent));
+                    $chatMessages.scrollTop($chatMessages[0].scrollHeight);
+                });
+
+                connection.on("ReceiveStreamComplete", function () {
+                    $currentMessageElement = null;
+                    currentMessageContent = "";
+                });
+
+                connection.start().catch(function (err) {
+                    console.error("SignalR Error:", err.toString());
+                });
+
+                $chatSend.on('click', function () {
+                    var message = $chatInput.val().trim();
+                    if (message) {
+                        var $userMsg = $('<div>')
+                            .addClass("bg-primary text-white p-2 rounded align-self-end shadow-sm")
+                            .css("max-width", "85%")
+                            .text(message);
+                        $chatMessages.append($userMsg);
+                        $chatMessages.scrollTop($chatMessages[0].scrollHeight);
+                        
+                        $chatInput.val('');
+                        connection.invoke("SendMessage", message).catch(function (err) {
+                            console.error("SignalR Invoke Error:", err.toString());
+                        });
+                    }
+                });
+
+                $chatInput.on('keypress', function (e) {
+                    if (e.which === 13) {
+                        $chatSend.click();
+                    }
+                });
+            });
+        </script>
+    }
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

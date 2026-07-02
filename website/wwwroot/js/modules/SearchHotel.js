@@ -1,12 +1,14 @@
 $(document).ready(function () {
 
+    let currentSortBy = 'price_asc'; // track active sort option
+
     function fetchHotels(page = 1) {
         // 1. Gather Search Bar Data
         const destination = $('input[name="destination"]').val() || '';
         const dates = $('#dateRangePicker').val() || '';
         let checkIn = null;
         let checkOut = null;
-        
+
         if (dates.includes(' to ')) {
             const parts = dates.split(' to ');
             checkIn = parts[0];
@@ -27,13 +29,28 @@ $(document).ready(function () {
         let minPrice = null;
         let maxPrice = null;
         if ($('#budget1').is(':checked')) { maxPrice = 1000000; }
-        if ($('#budget2').is(':checked')) { 
+        if ($('#budget2').is(':checked')) {
             if (minPrice === null || minPrice > 1000000) minPrice = 1000000;
             if (maxPrice === null || maxPrice < 2000000) maxPrice = 2000000;
         }
         if ($('#budget3').is(':checked')) {
             if (minPrice === null || minPrice > 2000000) minPrice = 2000000;
             maxPrice = null; // 2m+ has no upper bound
+        }
+
+        let minRating = null;
+        let maxRating = null;
+        if ($('#star5').is(':checked')) {
+            if (minRating === null || minRating > 5) minRating = 5;
+            if (maxRating === null || maxRating < 5) maxRating = 5;
+        }
+        if ($('#star4').is(':checked')) {
+            if (minRating === null || minRating > 4) minRating = 4;
+            if (maxRating === null || maxRating < 4) maxRating = 4;
+        }
+        if ($('#star3').is(':checked')) {
+            if (minRating === null || minRating > 3) minRating = 3;
+            if (maxRating === null || maxRating < 3) maxRating = 3;
         }
 
         // 3. Build Request Object
@@ -47,8 +64,11 @@ $(document).ready(function () {
             propertyTypes: propertyTypes.length > 0 ? propertyTypes : null,
             minPrice: minPrice,
             maxPrice: maxPrice,
+            minRating: minRating,
+            maxRating: maxRating,
             page: page,
-            pageSize: 10
+            pageSize: 10,
+            sortBy: currentSortBy
         };
 
         // 4. Show loading state
@@ -122,7 +142,7 @@ $(document).ready(function () {
                                             <span class="ms-2 small text-primary bg-primary bg-opacity-10 px-2 py-1 rounded"><i class="bi bi-hand-thumbs-up-fill"></i> ${hotel.propertyTypes.join(', ')}</span>
                                         </div>
                                         <p class="card-text small mb-2">
-                                            <a href="#" class="text-primary text-decoration-underline">${hotel.address}, ${hotel.city}</a>
+                                            <a href="/Hotel/Detail/${hotel.id}" class="text-primary text-decoration-underline">${hotel.address}, ${hotel.city}</a>
                                             <span class="text-muted ms-2">Great location</span>
                                         </p>
                                         <div class="mb-2 d-flex flex-wrap gap-1">
@@ -148,7 +168,7 @@ $(document).ready(function () {
                                     <div class="col-5 text-end d-flex flex-column justify-content-end">
                                         <div class="text-muted small mb-1">Price from (per night)</div>
                                         <div class="fs-4 fw-bold text-danger mb-2">${formatCurrency(hotel.minPricePerNight)}</div>
-                                        <a href="#" class="btn btn-primary fw-bold w-100">See availability <i class="bi bi-chevron-right small"></i></a>
+                                        <a href="/Hotel/Detail/${hotel.id}" class="btn btn-primary fw-bold w-100">See availability <i class="bi bi-chevron-right small"></i></a>
                                     </div>
                                 </div>
                             </div>
@@ -173,13 +193,13 @@ $(document).ready(function () {
         html += `<li class="page-item ${result.currentPage === 1 ? 'disabled' : ''}">
                     <a class="page-link pagination-btn" href="#" data-page="${result.currentPage - 1}">Previous</a>
                  </li>`;
-                 
+
         for (let i = 1; i <= result.totalPages; i++) {
             html += `<li class="page-item ${result.currentPage === i ? 'active' : ''}">
                         <a class="page-link pagination-btn" href="#" data-page="${i}">${i}</a>
                      </li>`;
         }
-        
+
         html += `<li class="page-item ${result.currentPage === result.totalPages ? 'disabled' : ''}">
                     <a class="page-link pagination-btn" href="#" data-page="${result.currentPage + 1}">Next</a>
                  </li>`;
@@ -188,22 +208,40 @@ $(document).ready(function () {
     }
 
     // Event Listeners
-    $('#searchForm').on('submit', function(e) {
+    $('#searchForm').on('submit', function (e) {
         e.preventDefault();
         fetchHotels(1);
     });
 
-    $('.form-check-input').on('change', function() {
+    $('.form-check-input').on('change', function () {
         fetchHotels(1);
     });
 
-    $(document).on('click', '.pagination-btn', function(e) {
+    $(document).on('click', '.pagination-btn', function (e) {
         e.preventDefault();
         const page = $(this).data('page');
         if (page) {
             fetchHotels(page);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+    });
+
+    // Sort By Dropdown
+    $(document).on('click', '#sortByMenu .dropdown-item', function (e) {
+        e.preventDefault();
+        const sortVal = $(this).data('sort');
+        const sortLabel = $(this).text();
+
+        // Update active state
+        $('#sortByMenu .dropdown-item').removeClass('active');
+        $(this).addClass('active');
+
+        // Update button label
+        $('#sortByLabel').text(sortLabel);
+
+        // Update sort state and re-fetch from page 1
+        currentSortBy = sortVal;
+        fetchHotels(1);
     });
 
     // Initial load

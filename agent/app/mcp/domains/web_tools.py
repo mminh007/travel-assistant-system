@@ -7,18 +7,10 @@ from app.core.settings import settings
 from app.services.query_transformer import transform_user_query
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
+from app.graph.config import get_llm_instance, invoke_llm_with_limit
 import asyncio
 
 logger = logging.getLogger("McpRuntimeGateway.WebTools")
-base_llm_kwargs = {
-    "api_key": settings.openai.api_key.get_secret_value() if settings.openai.api_key else None,
-    "base_url": settings.openai.base_url,
-    "streaming": True
-}
-
-# TIER 1: Fast & Cheap (Router)
-llm_tier1_fast = ChatOpenAI(model=settings.openai.tier1_fast_model, **base_llm_kwargs)
 
 # Initialize Tavily Client utilizing centralized validated configurations
 tavily_key = settings.tavily.api_key.get_secret_value() if settings.tavily.api_key else None
@@ -28,7 +20,12 @@ compression_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a factual summarizer. Extract ONLY relevant facts, technical specifications, or direct answers from the web snippet that match the user query. Remove marketing fluff, navigation text, and boilerplate. Be extremely concise. Keep it under 150 words."),
     ("human", "User Query: {query}\nWeb Snippet: {snippet}")
 ])
-compressor_chain = compression_prompt | llm_tier1_fast | StrOutputParser()
+
+async def _compress_snippet(query: str, snippet: str, config=None) -> str:
+    llm_tier1_fast = get_llm_instance(tier=1, config=config)
+    messages = compression_prompt.format_messages(query=query, snippet=snippet)
+    response = await invoke_llm_with_limit(1, llm_tier1_fast, messages, config=config)
+    return str(response.content).strip()
 
 async def search_web_logic(query: str, history_summary: str = "") -> str:
     """
@@ -72,7 +69,7 @@ async def search_web_logic(query: str, history_summary: str = "") -> str:
         for result in results:
             raw_snippet = result.get("content", "")
             if len(raw_snippet) > 100: # Chỉ nén các snippet đủ dài
-                tasks.append(compressor_chain.ainvoke({"query": clean_query, "snippet": raw_snippet}))
+                tasks.append(_compress_snippet(clean_query, raw_snippet))
         compressed_snippets = await asyncio.gather(*tasks)
 
         for idx, result in enumerate(results):

@@ -21,8 +21,13 @@
 
     <div class="row mt-4">
         <div class="col-md-3">
+            <!-- Mobile Filter Toggle -->
+            <button class="btn btn-outline-primary w-100 mb-3 d-md-none fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#filterSidebar" aria-expanded="false" aria-controls="filterSidebar">
+                <i class="bi bi-funnel-fill me-2"></i> Show Filters
+            </button>
+            
             <!-- Filter Sidebar -->
-            <div class="position-sticky" style="top: 20px;">
+            <div class="position-sticky collapse d-md-block" id="filterSidebar" style="top: 20px;">
                 @await Html.PartialAsync("Modules/FilterSearchModule")
             </div>
         </div>

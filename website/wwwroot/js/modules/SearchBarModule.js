@@ -37,7 +37,7 @@ $(document).ready(function() {
     });
 
     $('#btnDoneGuest').on('click', function() {
-        var dropdownEl = document.getElementById('guestInput');
+        var dropdownEl = $('#guestInput')[0];
         var dropdown = bootstrap.Dropdown.getInstance(dropdownEl);
         if (dropdown) {
             dropdown.hide();

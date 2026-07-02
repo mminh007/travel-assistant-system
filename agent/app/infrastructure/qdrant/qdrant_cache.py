@@ -112,6 +112,12 @@ class QdrantSemanticCache(SemanticCache):
             must=[FieldCondition(key="model_version", match=MatchValue(value=self.model_version))]
         )
 
+        exists = await asyncio.to_thread(
+            self.vector_store.client.collection_exists, self.collection
+        )
+        if not exists:
+            return None
+
         # ─── STEP 1: Qdrant ANN search with DB-level pre-filtering ───
         # score_threshold is enforced at the Qdrant engine level (Rust), not in Python.
         # This means bad candidates never cross the network boundary.

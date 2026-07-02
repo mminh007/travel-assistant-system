@@ -70,10 +70,22 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         return chat_pb2.ProviderConfigResponse(success=True, message=f"Configuration saved for user {request.user_id}")
 
     async def StreamChat(self, request: chat_pb2.ChatRequest, context: grpc.aio.ServicerContext):
-        logger.info(f"==> [gRPC] Received request from User: {request.user_id}, Session: {request.session_id}")
+        metadata = context.invocation_metadata()
+        correlation_id = "N/A"
+        if metadata:
+            for key, value in metadata:
+                if key == "x-correlation-id":
+                    correlation_id = value
+                    break
+
+        logger.info(f"==> [gRPC] Received request from User: {request.user_id}, Session: {request.session_id}, CorrelationId: {correlation_id}")
         
         # 🚀 OPTIMIZATION: Check semantic cache inside Vector DB to bypass LLM if hit
-        cached_reply = await container.semantic_cache.get(request.prompt)
+        try:
+            cached_reply = await container.semantic_cache.get(request.prompt)
+        except Exception as cache_err:
+            logger.warning(f"==> [gRPC] Semantic cache lookup failed, treating as MISS: {cache_err}")
+            cached_reply = None
         if cached_reply:
             logger.info(f"==> [gRPC] Cache hit for User: {request.user_id}")
             yield chat_pb2.ChatResponse(chunk=cached_reply)
@@ -111,6 +123,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         tier3_model = metadata.get("x-tier3-model")
 
         # ─── FALLBACK TO DYNAMIC USER CONFIG FROM REDIS ───
+        use_default_key = False
         if container.redis_client:
             user_config_data = await container.redis_client.get(f"user_config:{request.user_id}")
             if user_config_data:
@@ -153,11 +166,11 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                 
                 if kind == "on_chat_model_stream":
                     current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node == "supervisor_router":
+                    if current_node not in ["final_synthesizer", "out_of_domain"]:
                         continue
 
                     content = event["data"]["chunk"].content
-                    if content:
+                    if content and isinstance(content, str):
                         ai_full_response_text += content
                         yield chat_pb2.ChatResponse(chunk=content)
                         
@@ -166,15 +179,21 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                     final_state_messages = output_payload["messages"]
                     # 🚀 Intercept the terminal state domain configuration generated dynamically by the Supervisor
                     resolved_routing_domain = output_payload.get("current_domain", "travel")
+                    
+                    if not ai_full_response_text and final_state_messages:
+                        last_msg = final_state_messages[-1]
+                        if getattr(last_msg, "type", "") == "ai" and last_msg.content and isinstance(last_msg.content, str):
+                            ai_full_response_text += last_msg.content
+                            yield chat_pb2.ChatResponse(chunk=last_msg.content)
 
         try:
             if is_anonymous:
-                graph = self.graph.compile()
+                graph = self.graph.compile(name="compiled_graph")
                 async for chunk_response in run_stream(graph):
                     yield chunk_response
             else:
                 async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph = self.graph.compile(checkpointer=saver)
+                    graph = self.graph.compile(checkpointer=saver,name="compiled_graph")
                     async for chunk_response in run_stream(graph):
                         yield chunk_response
 
@@ -191,7 +210,10 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
 
             # 🚀 Cache the completed response text if available
             if ai_full_response_text:
-                await container.semantic_cache.set(request.prompt, ai_full_response_text)
+                try:
+                    await container.semantic_cache.set(request.prompt, ai_full_response_text)
+                except Exception as cache_err:
+                    logger.warning(f"==> [gRPC] Semantic cache write failed, skipping: {cache_err}")
 
             # ─── SECURE CRYPTOGRAPHIC AI RESPONSE RECEIPT GENERATION (SOLUTION A) ───
             if ai_full_response_text:

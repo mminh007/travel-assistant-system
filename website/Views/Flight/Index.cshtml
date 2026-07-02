@@ -43,13 +43,13 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="fw-bold mb-0" id="flightResultCount">Searching for flights...</h3>
                 <div class="dropdown">
-                    <button class="btn btn-outline-secondary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Sort by: Best
+                    <button id="flightSortBtn" class="btn btn-outline-secondary dropdown-toggle rounded-pill" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Sort by: <span id="flightSortLabel">Best</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Best</a></li>
-                        <li><a class="dropdown-item" href="#">Cheapest</a></li>
-                        <li><a class="dropdown-item" href="#">Fastest</a></li>
+                    <ul class="dropdown-menu dropdown-menu-end" id="flightSortMenu">
+                        <li><a class="dropdown-item active" href="#" data-sort="best">Best</a></li>
+                        <li><a class="dropdown-item" href="#" data-sort="cheapest">Cheapest</a></li>
+                        <li><a class="dropdown-item" href="#" data-sort="fastest">Fastest</a></li>
                     </ul>
                 </div>
             </div>

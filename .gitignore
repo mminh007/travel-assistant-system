@@ -197,3 +197,10 @@ bld/
 
 # Mac / OS X
 .DS_Store
+
+# GitNexus & AI Agent Local Cache
+.gitnexus/
+.claude/
+.cursor/
+.windsurf/
+.agent/

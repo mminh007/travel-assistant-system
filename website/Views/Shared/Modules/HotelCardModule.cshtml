@@ -3,7 +3,7 @@
 <div class="card mb-3 shadow-sm border-0 position-relative">
     <div class="row g-0">
         <div class="col-md-4 position-relative">
-            <img src="@Model.ThumbnailUrl" class="img-fluid rounded-start h-100 object-fit-cover" alt="@Model.Name">
+            <img src="@Model.ThumbnailUrl" class="img-fluid rounded-start h-100 object-fit-cover w-100" style="min-height: 200px;" alt="@Model.Name">
             <div class="position-absolute top-0 end-0 p-2">
                 <button class="btn btn-light btn-sm rounded-circle shadow-sm"><i class="bi bi-heart"></i></button>
             </div>
@@ -21,7 +21,7 @@
                             <span class="ms-2 small text-primary"><i class="bi bi-hand-thumbs-up-fill"></i></span>
                         </div>
                         <p class="card-text small mb-1">
-                            <a href="#" class="text-primary text-decoration-underline">@Model.Address, @Model.City</a>
+                            <a href="/Hotel/Detail/@Model.Id" class="text-primary text-decoration-underline">@Model.Address, @Model.City</a>
                             <span class="text-muted ms-2">2.5 km from center</span>
                         </p>
                         <span class="badge bg-success mb-2">Sustainable Travel Level 2</span>
@@ -39,19 +39,19 @@
                 </div>
 
                 <div class="mt-auto row">
-                    <div class="col-8">
+                    <div class="col-12 col-sm-8 mb-3 mb-sm-0">
                         <div class="fw-bold small">Deluxe Double Room</div>
                         <div class="text-muted small">1 extra-large double bed</div>
                         <div class="text-success small fw-bold mt-1"><i class="bi bi-check text-success"></i> Free cancellation</div>
                         <div class="text-success small"><i class="bi bi-check text-success"></i> No prepayment needed <span class="text-muted">– pay at the property</span></div>
                         <div class="text-danger small mt-1 fw-bold">Only 2 rooms left at this price on our site</div>
                     </div>
-                    <div class="col-4 text-end d-flex flex-column justify-content-end">
+                    <div class="col-12 col-sm-4 text-sm-end d-flex flex-column justify-content-end">
                         <div class="text-muted small">2 nights, 2 adults</div>
                         <div class="text-decoration-line-through text-danger small">VND 3,500,000</div>
                         <div class="fs-4 fw-bold">VND 2,800,000</div>
                         <div class="text-muted small mb-2">+VND 250,000 taxes and charges</div>
-                        <a href="#" class="btn btn-primary fw-bold">See availability <i class="bi bi-chevron-right small"></i></a>
+                        <a href="/Hotel/Detail/@Model.Id" class="btn btn-primary fw-bold">See availability <i class="bi bi-chevron-right small"></i></a>
                     </div>
                 </div>
             </div>

@@ -1,0 +1,29 @@
+@model Booking.Web.Models.Domain.Hotel
+
+@{
+    ViewData["Title"] = Model.Name;
+}
+
+<div class="container mt-4 mb-5">
+    <!-- Breadcrumbs -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="/Hotel/Search">Vietnam</a></li>
+            <li class="breadcrumb-item"><a href="#">@Model.City</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@Model.Name</li>
+        </ol>
+    </nav>
+
+    <!-- Header & Gallery -->
+    @await Html.PartialAsync("Modules/_HotelInfo", Model)
+    @await Html.PartialAsync("Modules/_HotelGallery", Model)
+
+    <!-- Availability Table -->
+    @await Html.PartialAsync("Modules/_RoomAvailabilityTable", Model)
+
+</div>
+
+@section Scripts {
+    <script src="~/js/modules/HotelDetail.js" asp-append-version="true" defer></script>
+}

@@ -1,5 +1,6 @@
 # app/graph/config.py
 import hashlib
+from functools import lru_cache
 from typing import Dict, Any, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
@@ -8,6 +9,9 @@ from langchain_anthropic import ChatAnthropic
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
 from app.mcp.tool_registry import get_tools_by_domain
+from app.core.concurrency import get_semaphore
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import httpx
 
 logger = setup_app_logger("GraphConfig")
 
@@ -18,6 +22,7 @@ SUPPORTED_PROVIDERS = frozenset({"openai", "claude"})
 
 
 # ─── SETTINGS FINGERPRINT (Cache Staleness Guard) ───
+@lru_cache(maxsize=1)
 def _get_settings_fingerprint() -> str:
     """
     Creates a short hash derived from all critical, mutable settings values.
@@ -48,6 +53,7 @@ _STRUCTURED_LLM_CACHE: Dict[str, Any] = {}
 _BOUND_LLM_CACHE: Dict[str, Any] = {}
 
 
+@lru_cache(maxsize=32)
 def _get_provider_settings(provider: str):
     """Return the settings object for a supported provider."""
     if provider == "claude":
@@ -87,7 +93,7 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
     configurable = config.get("configurable", {}) if config else {}
 
     # Priority: explicit user config → auto-detect from available API keys
-    provider = configurable.get("llm_provider", "").lower()
+    provider = (configurable.get("llm_provider") or "").lower()
     if provider not in SUPPORTED_PROVIDERS:
         provider = "claude" if settings.claude.api_key else "openai"
 
@@ -129,16 +135,18 @@ def get_llm_instance(tier: int, config: RunnableConfig = None) -> BaseChatModel:
             _LLM_INSTANCE_CACHE[cache_key] = ChatAnthropic(
                 model=model_name,
                 api_key=api_key_str,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
                 streaming=True,
+                max_retries=5,
             )
         else:  # openai
             _LLM_INSTANCE_CACHE[cache_key] = ChatOpenAI(
                 model=model_name,
                 api_key=api_key_str,
                 base_url=base_url,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
                 streaming=True,
+                max_retries=5,
             )
 
     return _LLM_INSTANCE_CACHE[cache_key]
@@ -175,6 +183,23 @@ def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None) ->
         _STRUCTURED_LLM_CACHE[cache_key] = base_llm.with_structured_output(schema)
 
     return _STRUCTURED_LLM_CACHE[cache_key]
+
+
+# ─── CONCURRENCY & RETRY WRAPPER ───
+
+@retry(
+    retry=retry_if_exception_type((httpx.HTTPStatusError,)),
+    wait=wait_exponential(multiplier=2, min=5, max=60),
+    stop=stop_after_attempt(4),
+    reraise=True
+)
+async def invoke_llm_with_limit(tier: int, llm, messages: list, config: RunnableConfig = None):
+    """
+    Executes an LLM call subject to rate limits (retry on 429) and concurrency limits.
+    """
+    sem = get_semaphore(tier)
+    async with sem:
+        return await llm.ainvoke(messages, config)
 
 
 # ─── BOUND LLM CACHING MECHANISM (O(1) OPTIMIZATION) ───

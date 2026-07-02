@@ -108,11 +108,11 @@ async def chat_stream_endpoint(
                 
                 if kind == "on_chat_model_stream":
                     current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node == "supervisor_router":
+                    if current_node not in ["final_synthesizer", "out_of_domain"]:
                         continue
                     
                     content = event["data"]["chunk"].content
-                    if content:
+                    if content and isinstance(content, str):
                         ai_full_response_text += content
                         yield f"data: {content}\n\n"
                         
@@ -120,15 +120,21 @@ async def chat_stream_endpoint(
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]
                     resolved_domain = output_payload.get("current_domain", "general_memory")
+                    
+                    if not ai_full_response_text and final_state_messages:
+                        last_msg = final_state_messages[-1]
+                        if getattr(last_msg, "type", "") == "ai" and last_msg.content and isinstance(last_msg.content, str):
+                            ai_full_response_text += last_msg.content
+                            yield f"data: {last_msg.content}\n\n"
 
         try:
             if is_anonymous:
-                graph_run = compiled_graph.compile()
+                graph_run = compiled_graph.compile(name="compiled_graph")
                 async for chunk in run_graph_stream(graph_run):
                     yield chunk
             else:
                 async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph_run = compiled_graph.compile(checkpointer=saver)
+                    graph_run = compiled_graph.compile(checkpointer=saver,name="compiled_graph")
                     async for chunk in run_graph_stream(graph_run):
                         yield chunk
             

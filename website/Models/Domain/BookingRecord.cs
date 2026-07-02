@@ -37,6 +37,18 @@ namespace Booking.Web.Models.Domain
         [MaxLength(20)]
         public string Status { get; set; } = "Pending"; // Pending, Confirmed, Cancelled
 
+        [MaxLength(100)]
+        public string? GuestName { get; set; }
+        
+        [MaxLength(100)]
+        public string? GuestEmail { get; set; }
+
+        [MaxLength(20)]
+        public string? PhoneNumber { get; set; }
+
+        [MaxLength(500)]
+        public string? SpecialRequests { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

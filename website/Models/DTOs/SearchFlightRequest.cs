@@ -10,5 +10,6 @@ namespace Booking.Web.Models.DTOs
         public string? ReturnDate { get; set; }
         public int Adults { get; set; } = 1;
         public int Max { get; set; } = 20; // Number of results
+        public string SortBy { get; set; } = "best";
     }
 }

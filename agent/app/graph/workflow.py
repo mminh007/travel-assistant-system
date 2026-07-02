@@ -11,9 +11,8 @@ from app.graph.nodes import (
     node_travel_react_agent,
     node_planner_agent,
     node_direct_executor_init,
-    node_critic_agent,
+    node_evaluator_agent,
     node_final_synthesizer,
-    node_reflection_agent,
     node_task_manager,
     node_finding_extractor,
 )
@@ -40,8 +39,7 @@ workflow.add_node("out_of_domain", node_out_of_domain)
 workflow.add_node("travel_react_agent", node_travel_react_agent)
 workflow.add_node("planner", node_planner_agent)
 workflow.add_node("direct_executor_init", node_direct_executor_init)
-workflow.add_node("critic_agent", node_critic_agent)
-workflow.add_node("reflection_agent", node_reflection_agent)
+workflow.add_node("evaluator_agent", node_evaluator_agent)
 workflow.add_node("task_manager", node_task_manager)
 workflow.add_node("finding_extractor", node_finding_extractor)
 workflow.add_node("final_synthesizer", node_final_synthesizer)
@@ -160,8 +158,8 @@ workflow.add_conditional_edges("travel_react_agent", evaluate_tool_hooks, execut
 # Link tracker directly to the actual LangChain ToolNode
 workflow.add_edge("action_tracker", "tools")
 
-# finding_extractor always proceeds to critic_agent after extraction completes
-workflow.add_edge("finding_extractor", "critic_agent")
+# finding_extractor always proceeds to evaluator_agent after extraction completes
+workflow.add_edge("finding_extractor", "evaluator_agent")
 
 def route_back_to_agent(state: AgentState) -> str:
     return "travel_react_agent"
@@ -173,17 +171,17 @@ workflow.add_conditional_edges(
 )
 
 # ─── PHASE 3: EVALUATION & SYNTHESIS PIPELINE ───
-workflow.add_edge("critic_agent", "reflection_agent")
 
-def route_from_reflection(state: AgentState) -> str:
+def route_from_evaluator(state: AgentState) -> str:
     if state.get("needs_rework"):
         if state.get("rework_count", 0) >= MAX_REWORK_CYCLES:
             return "task_manager"
         return "travel_react_agent"
     return "task_manager"
+
 workflow.add_conditional_edges(
-    "reflection_agent",
-    route_from_reflection,
+    "evaluator_agent",
+    route_from_evaluator,
     {
         "travel_react_agent": "travel_react_agent",
         "task_manager": "task_manager"
@@ -206,5 +204,5 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("final_synthesizer", END)
 
-compiled_graph = workflow.compile(name="compiled_graph") 
+compiled_graph = workflow
 

@@ -14,7 +14,10 @@ namespace Booking.Web.Models.DTOs
         public decimal? MinPrice { get; set; }
         public decimal? MaxPrice { get; set; }
         public List<string>? PropertyTypes { get; set; }
+        public int? MinRating { get; set; }
+        public int? MaxRating { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
+        public string SortBy { get; set; } = "price_asc";
     }
 }

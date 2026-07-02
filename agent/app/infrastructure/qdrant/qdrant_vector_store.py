@@ -83,7 +83,7 @@ class QdrantVectorStore(VectorStore):
             field_name="user_id",
             field_schema=PayloadSchemaType.KEYWORD
         )
-        # Keyword index for RAG domain routing (general_memory, research_papers, etc.)
+        # Keyword index for RAG domain routing (travel_react_agent, etc.)
         self.client.create_payload_index(
             collection_name=collection_name,
             field_name="category",

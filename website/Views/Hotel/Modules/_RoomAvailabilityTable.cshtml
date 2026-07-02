@@ -1,0 +1,97 @@
+@model Booking.Web.Models.Domain.Hotel
+@using System.Text.Json
+
+<div class="mt-5" id="availability">
+    <h3 class="mb-4">Availability</h3>
+    
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4 bg-primary bg-opacity-10 rounded">
+            <form class="row g-3 align-items-end" id="availabilityForm">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Check-in Date</label>
+                    <input type="date" class="form-control" id="checkInDate" name="checkIn" required value="@DateTime.Now.AddDays(1).ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Check-out Date</label>
+                    <input type="date" class="form-control" id="checkOutDate" name="checkOut" required value="@DateTime.Now.AddDays(2).ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Guests</label>
+                    <select class="form-select" id="guests" name="guests">
+                        <option value="1">1 Adult</option>
+                        <option value="2" selected>2 Adults</option>
+                        <option value="3">3 Adults</option>
+                        <option value="4">4 Adults</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button type="button" class="btn btn-primary" onclick="updateAvailability()">Change Search</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="table-responsive border rounded">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="width: 30%">Room Type</th>
+                    <th scope="col" style="width: 15%">Number of guests</th>
+                    <th scope="col" style="width: 25%">Price per night</th>
+                    <th scope="col" style="width: 15%">Select rooms</th>
+                    <th scope="col" style="width: 15%"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var room in Model.RoomTypes)
+                {
+                    <tr>
+                        <td>
+                            <a href="#" class="fw-bold text-decoration-none h5">@room.Name</a>
+                            <div class="small mt-2">
+                                @{
+                                    var amenities = new List<string>();
+                                    try {
+                                        var list = JsonSerializer.Deserialize<List<string>>(room.Amenities);
+                                        if (list != null) amenities = list;
+                                    } catch {}
+                                }
+                                <div class="d-flex flex-wrap gap-2 text-muted">
+                                    @foreach(var am in amenities.Take(4))
+                                    {
+                                        <span><i class="bi bi-check2"></i> @am</span>
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            @for(int i=0; i < room.MaxOccupancy; i++)
+                            {
+                                <i class="bi bi-person-fill fs-5"></i>
+                            }
+                        </td>
+                        <td>
+                            <div class="fw-bold fs-5">VND @room.PricePerNight.ToString("N0")</div>
+                            <div class="small text-muted">Includes taxes and charges</div>
+                        </td>
+                        <td>
+                            <select class="form-select room-select" data-room-id="@room.Id">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-primary w-100 fw-bold book-btn" data-room-id="@room.Id">
+                                I'll reserve
+                            </button>
+                            <ul class="text-start small mt-2 ps-3 mb-0 text-success list-unstyled">
+                                <li><i class="bi bi-check"></i> Instant confirmation</li>
+                            </ul>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

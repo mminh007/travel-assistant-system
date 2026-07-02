@@ -1,13 +1,14 @@
-<form action="/Hotel/Search" method="GET" id="searchForm" class="bg-warning p-2 rounded d-flex flex-wrap gap-2 shadow-sm align-items-center" style="margin-top: -25px; position: relative; z-index: 10;">
-    <div class="flex-grow-1 position-relative">
-        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-geo-alt-fill"></i></span>
-        <input type="text" class="form-control form-control-lg border-0 ps-5" placeholder="Where are you going?" name="destination" value="@ViewData["Destination"]">
-    </div>
-    <div class="flex-grow-1 position-relative">
-        <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-calendar-date"></i></span>
-        <input type="text" id="dateRangePicker" class="form-control form-control-lg border-0 ps-5" placeholder="Check-in - Check-out" name="dates" value="@ViewData["Dates"]">
-    </div>
-    <div class="flex-grow-1 position-relative dropdown" id="guestDropdownWrapper">
+<form action="/Hotel/Search" method="GET" id="searchForm" class="bg-warning p-2 rounded shadow-sm" style="margin-top: -25px; position: relative; z-index: 10;">
+    <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-4 position-relative">
+            <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-geo-alt-fill"></i></span>
+            <input type="text" class="form-control form-control-lg border-0 ps-5" placeholder="Where are you going?" name="destination" value="@ViewData["Destination"]">
+        </div>
+        <div class="col-12 col-md-3 position-relative">
+            <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-calendar-date"></i></span>
+            <input type="text" id="dateRangePicker" class="form-control form-control-lg border-0 ps-5" placeholder="Check-in - Check-out" name="dates" value="@ViewData["Dates"]">
+        </div>
+        <div class="col-12 col-md-3 position-relative dropdown" id="guestDropdownWrapper">
         <span class="position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"><i class="bi bi-person-fill"></i></span>
         <input type="text" id="guestInput" class="form-control form-control-lg border-0 ps-5" placeholder="2 adults · 0 children · 1 room" name="guests" value="@ViewData["Guests"]" readonly data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="cursor: pointer; background-color: #fff;">
         
@@ -41,9 +42,10 @@
             </div>
         </div>
     </div>
-    <div>
-        <button type="submit" id="btnSearch" class="btn btn-primary btn-lg fw-bold px-4">Search</button>
+    <div class="col-12 col-md-2 d-grid">
+        <button type="submit" id="btnSearch" class="btn btn-primary btn-lg fw-bold">Search</button>
     </div>
+</div>
 </form>
 
 <script src="~/js/modules/SearchBarModule.js" asp-append-version="true" defer></script>

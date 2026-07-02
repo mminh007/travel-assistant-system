@@ -1,7 +1,9 @@
 using Booking.Web.Models.DTOs;
-using Booking.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Xml;
+using Booking.Web.Services.Interfaces;
 
 namespace Booking.Web.Controllers
 {
@@ -39,6 +41,18 @@ namespace Booking.Web.Controllers
             }
 
             var flights = await _amadeusService.SearchFlightsAsync(request);
+
+            if (request.SortBy == "cheapest")
+            {
+                flights = flights.OrderBy(f => decimal.TryParse(f.TotalPrice, out var price) ? price : 0).ToList();
+            }
+            else if (request.SortBy == "fastest")
+            {
+                flights = flights.OrderBy(f => {
+                    try { return XmlConvert.ToTimeSpan(f.Duration); }
+                    catch { return System.TimeSpan.MaxValue; }
+                }).ToList();
+            }
             
             var result = new PaginatedResult<FlightDto>
             {
