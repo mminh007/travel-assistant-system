@@ -174,6 +174,15 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                         ai_full_response_text += content
                         yield chat_pb2.ChatResponse(chunk=content)
                         
+                elif kind == "on_chat_model_end":
+                    current_node = event.get("metadata", {}).get("langgraph_node", "")
+                    if current_node in ["final_synthesizer", "out_of_domain"]:
+                        output = event.get("data", {}).get("output")
+                        if output and hasattr(output, "response_metadata"):
+                            finish_reason = output.response_metadata.get("finish_reason")
+                            if finish_reason in ("length", "max_tokens"):
+                                logger.warning(f"⚠️ [TOKEN LIMIT EXCEEDED] max_completion_tokens exceeded in {current_node}")
+                                
                 elif kind == "on_chain_end" and event["name"] == "compiled_graph":
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]

@@ -38,9 +38,6 @@
                         <li class="nav-item">
                             <a class="nav-link text-white fw-semibold px-3 py-2 rounded-pill me-2 @(ctrl == "Flight" ? "border border-white bg-opacity-25" : "")" asp-area="" asp-controller="Flight" asp-action="Index"><i class="bi bi-airplane"></i> Flights</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-white fw-semibold px-3 py-2 rounded-pill @(ctrl == "Package" ? "border border-white bg-opacity-25" : "")" asp-area="" asp-controller="Package" asp-action="Search"><i class="bi bi-briefcase"></i> Flight + Hotel</a>
-                        </li>
                     </ul>
                     <partial name="_LoginPartial" />
                 </div>
@@ -124,7 +121,8 @@
                         $chatMessages.append($currentMessageElement);
                     }
                     currentMessageContent += chunk;
-                    $currentMessageElement.html(marked.parse(currentMessageContent));
+                    var cleanContent = currentMessageContent.replace(/^```(markdown)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+                    $currentMessageElement.html(marked.parse(cleanContent));
                     $chatMessages.scrollTop($chatMessages[0].scrollHeight);
                 });
 

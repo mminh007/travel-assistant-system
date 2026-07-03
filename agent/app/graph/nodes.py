@@ -452,6 +452,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         "You are the FINAL_SYNTHESIZER. Create a highly polished, professional Markdown response "
         "that directly addresses the user's request.\n"
         f"CRITICAL RULE: You MUST output your final response entirely in the following language: {detected_language}\n"
+        "CRITICAL: Do NOT wrap the final response in a markdown code block (e.g. do not wrap the response with ```markdown or ```). Output plain Markdown text directly.\n"
         "Synthesize the outputs from the completed tasks into a coherent and unified answer. "
         "Do not artificially separate the response into 'Key Findings' and 'Detailed Analysis' unless appropriate.\n"
         "Extract, deduplicate, and compile any sources/citations into a 'Bibliography' at the end if applicable.\n\n"
@@ -462,6 +463,15 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
 
     final_response = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config)
 
+    # Clean any leading/trailing markdown code fences as a failsafe
+    if final_response and hasattr(final_response, "content") and isinstance(final_response.content, str):
+        content = final_response.content.strip()
+        if content.startswith("```markdown") and content.endswith("```"):
+            content = content[11:-3].strip()
+        elif content.startswith("```") and content.endswith("```"):
+            content = content[3:-3].strip()
+        final_response.content = content
+        
     total_iterations = state.get("iteration_count", 0)
     GRAPH_ITERATIONS.labels(domain=state.get("current_domain", "general_memory")).observe(total_iterations)
 
