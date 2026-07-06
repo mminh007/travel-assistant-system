@@ -54,6 +54,7 @@ class RedisSettings(BaseSettings):
 class QdrantSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="QDRANT_", extra="ignore")
     collection_name: str = "long_term_memory"
+    hotels_collection_name: str = "hotels_collection"
     server_host: str = "localhost"
     server_port: str = "6333"
 

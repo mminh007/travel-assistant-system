@@ -1,6 +1,6 @@
 # app/bootstrap/container.py
 from app.infrastructure.embedding_provider import EmbeddingProvider
-from app.infrastructure.qdrant import QdrantMemoryStore, QdrantSemanticCache, QdrantVectorStore
+from app.infrastructure.qdrant import QdrantMemoryStore, QdrantSemanticCache, QdrantVectorStore, QdrantHotelStore
 from app.services import MemoryService, MemoryWorker
 from app.services import FactExtractor
 from app.retrieval import HybridRetriever
@@ -82,6 +82,7 @@ class Container:
         self.embedding_provider = None
         self.vector_store = None
         self.memory_store = None
+        self.hotel_store = None
         self.extractor = None
         self.semantic_cache = None
         self.hybrid_search = None
@@ -135,6 +136,9 @@ class Container:
             embedding_provider=self.embedding_provider,
             vector_store=self.vector_store
         )
+
+        self.hotel_store = QdrantHotelStore()
+        logger.info("==> [Container] QdrantHotelStore initialized.")
 
     async def shutdown(self):
         if self.redis_client:

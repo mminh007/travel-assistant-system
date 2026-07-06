@@ -5,6 +5,7 @@ import sys
 import aio_pika
 from app.core.settings import settings
 from app.services import MemoryWorker
+from app.services.hotel_sync_handler import process_hotel_sync_message
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -91,8 +92,28 @@ async def main():
             durable=True,
             arguments=queue_arguments)
         
+        # ─── Consumer 1 (Current): Memory Extraction ───
         logger.info(f"🎧 Worker is actively blocking on event loop queue parameters: '{settings.rabbitmq.queue_name}'...\n")
         await queue.consume(process_message)
+
+        # ─── Consumer 2 (New): Hotel Sync ───
+        hotel_dlx_name = "dlx_hotel_exchange"
+        hotel_dlq_name = "hotel_sync_dlq"
+        hotel_dlx = await channel.declare_exchange(hotel_dlx_name, aio_pika.ExchangeType.DIRECT)
+        hotel_dlq = await channel.declare_queue(hotel_dlq_name, durable=True)
+        await hotel_dlq.bind(hotel_dlx, routing_key=hotel_dlq_name)
+
+        hotel_queue = await channel.declare_queue(
+            "hotel_sync_queue",
+            durable=True,
+            arguments={
+                "x-dead-letter-exchange": hotel_dlx_name,
+                "x-dead-letter-routing-key": hotel_dlq_name
+            }
+        )
+        await hotel_queue.consume(process_hotel_sync_message)
+
+        logger.info("🎧 Both consumers active: [fact_extraction_queue] + [hotel_sync_queue]")
         await asyncio.Future()
 
 if __name__ == "__main__":
