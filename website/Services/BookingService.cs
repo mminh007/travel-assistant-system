@@ -54,7 +54,13 @@ namespace Booking.Web.Services
             var booking = await _context.Bookings.FindAsync(bookingId);
             if (booking == null) return false;
 
-            booking.Status = "Confirmed";
+            if (booking.Status == "Success")
+            {
+                // Already processed (idempotent return)
+                return true;
+            }
+
+            booking.Status = "Success";
             _context.Bookings.Update(booking);
 
             var payment = new Payment
@@ -70,6 +76,39 @@ namespace Booking.Web.Services
             };
 
             _context.Payments.Add(payment);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<System.Collections.Generic.IEnumerable<BookingRecord>> GetBookingsByUserIdAsync(Guid userId)
+        {
+            return await _context.Bookings
+                .Include(b => b.RoomType)
+                .ThenInclude(rt => rt.Hotel)
+                .Where(b => b.UserId == userId)
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<bool> CancelBookingAsync(Guid bookingId, Guid userId)
+        {
+            var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId && b.UserId == userId);
+            
+            if (booking == null) return false;
+
+            if (booking.Status == "Cancelled") return true; // Already cancelled
+
+            var hoursSinceCreation = (DateTime.UtcNow - booking.CreatedAt).TotalHours;
+            if (hoursSinceCreation > 24)
+            {
+                return false; // Cannot cancel after 24 hours
+            }
+
+            booking.Status = "Cancelled";
+            booking.UpdatedAt = DateTime.UtcNow;
+            
+            _context.Bookings.Update(booking);
             await _context.SaveChangesAsync();
 
             return true;

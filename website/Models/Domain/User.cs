@@ -23,6 +23,12 @@ namespace Booking.Web.Models.Domain
         [MaxLength(50)]
         public string PhoneNumber { get; set; } = string.Empty;
 
+        [MaxLength(255)]
+        public string Address { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string Nationality { get; set; } = string.Empty;
+
         public string AvatarUrl { get; set; } = string.Empty;
 
         [MaxLength(20)]

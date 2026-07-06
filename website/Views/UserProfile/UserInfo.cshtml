@@ -1,0 +1,71 @@
+@model Booking.Web.Models.Domain.User
+@{
+    ViewData["Title"] = "User Profile";
+}
+
+<div class="container py-5" id="userProfileContainer">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 premium-card" id="userInfoCard">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <h3 class="mb-0 text-primary fw-bold">User Information</h3>
+                    <p class="text-muted small">Update your personal details below.</p>
+                </div>
+                <div class="card-body p-4">
+                    <div id="updateAlert" class="alert d-none" role="alert"></div>
+
+                    <form id="userInfoForm" class="needs-validation" novalidate>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label for="FullName" class="form-label text-muted">Full Name</label>
+                                <input type="text" class="form-control premium-input" id="FullName" name="FullName" value="@Model.FullName" required>
+                                <div class="invalid-feedback">Please enter your full name.</div>
+                            </div>
+                            
+                            <div class="col-sm-6">
+                                <label for="PhoneNumber" class="form-label text-muted">Phone Number</label>
+                                <input type="tel" class="form-control premium-input" id="PhoneNumber" name="PhoneNumber" value="@Model.PhoneNumber">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="Email" class="form-label text-muted">Email <span class="badge bg-light text-dark border">Read-only</span></label>
+                                <input type="email" class="form-control premium-input" id="Email" value="@Model.Email" readonly disabled>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="Address" class="form-label text-muted">Address</label>
+                                <input type="text" class="form-control premium-input" id="Address" name="Address" value="@Model.Address" placeholder="123 Main St, City, Country">
+                            </div>
+
+                            <div class="col-md-12">
+                                <label for="Nationality" class="form-label text-muted">Nationality</label>
+                                <select class="form-select premium-select" id="Nationality" name="Nationality" asp-for="Nationality">
+                                    <option value="">Select your nationality...</option>
+                                    <option value="Vietnam">🇻🇳 Vietnam</option>
+                                    <option value="United States">🇺🇸 United States</option>
+                                    <option value="United Kingdom">🇬🇧 United Kingdom</option>
+                                    <option value="Japan">🇯🇵 Japan</option>
+                                    <option value="South Korea">🇰🇷 South Korea</option>
+                                    <option value="Australia">🇦🇺 Australia</option>
+                                    <option value="France">🇫🇷 France</option>
+                                    <option value="Germany">🇩🇪 Germany</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <button class="btn btn-primary w-100 premium-btn py-2" type="submit" id="btnUpdateProfile">
+                            <span class="spinner-border spinner-border-sm d-none me-2" id="updateSpinner" role="status" aria-hidden="true"></span>
+                            Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/modules/UserProfile.js" asp-append-version="true"></script>
+}

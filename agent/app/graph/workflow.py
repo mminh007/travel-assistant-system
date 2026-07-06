@@ -15,6 +15,7 @@ from app.graph.nodes import (
     node_final_synthesizer,
     node_task_manager,
     node_finding_extractor,
+    node_support_agent,
 )
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
@@ -43,14 +44,19 @@ workflow.add_node("evaluator_agent", node_evaluator_agent)
 workflow.add_node("task_manager", node_task_manager)
 workflow.add_node("finding_extractor", node_finding_extractor)
 workflow.add_node("final_synthesizer", node_final_synthesizer)
+workflow.add_node("support_agent", node_support_agent)
 
 workflow.set_entry_point("input_guardrail")
 
 # ─── PHASE 1: COMPLEXITY-AWARE ROUTING ───
 def route_from_guardrail(state: AgentState) -> str:
-    """Routes out of domain or to planner/direct init."""
+    """Routes out of domain, to support agent, or to planner/direct init."""
     if not state.get("is_in_domain", True):
         return "out_of_domain"
+    
+    intent = state.get("intent_category", "")
+    if intent == "system_navigation_faq":
+        return "support_agent"
     
     complexity = state.get("complexity", "medium")
     if complexity == "low":
@@ -62,12 +68,14 @@ workflow.add_conditional_edges(
     route_from_guardrail,
     {
         "out_of_domain": "out_of_domain",
+        "support_agent": "support_agent",
         "direct_executor_init": "direct_executor_init",
         "planner": "planner"
     }
 )
 
 workflow.add_edge("out_of_domain", END)
+workflow.add_edge("support_agent", END)
 
 workflow.add_edge("planner", "travel_react_agent")
 workflow.add_edge("direct_executor_init", "travel_react_agent")

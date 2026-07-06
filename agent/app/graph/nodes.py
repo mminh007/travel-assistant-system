@@ -25,7 +25,7 @@ logger = setup_app_logger("CognitiveNodes")
 
 class InputGuardrailOutput(BaseModel):
     is_in_domain: bool = Field(description="True if the request is related to travel, flights, hotels, or travel FAQs. False otherwise.")
-    intent_category: Literal["hotel_booking", "flight_booking", "travel_faq", "itinerary_planning", "out_of_domain"] = Field(description="The category of the user's request.")
+    intent_category: Literal["hotel_booking", "flight_booking", "travel_faq", "itinerary_planning", "system_navigation_faq", "out_of_domain"] = Field(description="The category of the user's request.")
     complexity: str = Field(description="Level of complexity: 'low', 'medium', 'high'.")
     objective: str = Field(description="The overarching execution objective for the Planner.")
     detected_language: str = Field(description="The detected language of the user's prompt (e.g., 'English', 'Vietnamese', 'Spanish').")
@@ -141,7 +141,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
     try:
         structured_llm = get_structured_llm(1, InputGuardrailOutput, config)
         decision: InputGuardrailOutput = await invoke_llm_with_limit(1, structured_llm, [
-            SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request?"),
+            SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request, or a question about how to use the website (system_navigation_faq)?"),
             HumanMessage(content=user_latest_message)
         ], config)
         logger.info(f"\n\n==> [PROCESS] INPUT_GUARDRAIL Initializing...")
@@ -172,6 +172,48 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
             "complexity": "low",
             "detected_language": "English"
         }
+
+async def node_support_agent(state: AgentState, config: RunnableConfig = None):
+    """
+    Node: SUPPORT_AGENT.
+    Specialized agent for answering questions about website operations (UI/navigation).
+    Only has access to read the user manual from the database (via Qdrant/Tool).
+    Strictly forbidden from answering security or backend architecture queries.
+    """
+    user_latest_message = state["messages"][-1].content
+    logger.info(f"==> [Support Agent] Handling navigation FAQ: '{user_latest_message[:50]}...'")
+
+    support_system_prompt = (
+        "You are a Customer Support Specialist for the hotel booking system. "
+        "Your only task is to answer questions and guide users on how to use the website "
+        "(e.g., how to book a room, update personal info, view booking history, cancel a booking, etc.).\n\n"
+        "CRITICAL RULES:\n"
+        "1. You MUST ONLY rely on the knowledge provided in the Database (via the user guide document search tool) to answer.\n"
+        "2. You are STRICTLY FORBIDDEN from performing any Web Search (e.g., Tavily, Google).\n"
+        "3. ABSOLUTELY DO NOT disclose any information regarding system architecture, backend logic, database structure, or security issues. "
+        "If a user asks about system architecture or security, you must politely decline by saying: "
+        "'I apologize, but I am only a website usage assistant and I am not permitted to provide information regarding system architecture or security.'\n"
+        "4. Always keep your answers concise, polite, and accurate, matching the user's language."
+    )
+
+    llm = get_llm_instance(config)
+    
+    # Optional: Bind ONLY the specific tool (like vector search) if we had the tool registry ready here. 
+    # For now, we bind the mcp tools that allow Qdrant read (we assume travel_react_agent tools are shared or mcp tools include qdrant search).
+    from app.mcp.mcp_client import get_mcp_tools
+    mcp_tools = get_mcp_tools()
+    # In a real isolation, we would filter mcp_tools to ONLY include qdrant_search, excluding tavily_search.
+    safe_tools = [t for t in mcp_tools if "search_tavily" not in t.name]
+    bound_llm = llm.bind_tools(safe_tools)
+
+    response = await bound_llm.ainvoke([
+        SystemMessage(content=support_system_prompt),
+        HumanMessage(content=user_latest_message)
+    ], config)
+
+    # Convert ToolMessage handling or just return AIMessage if it directly responds
+    return {"messages": [response]}
+
 
 
 async def node_planner_agent(state: AgentState, config: RunnableConfig = None):

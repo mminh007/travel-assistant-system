@@ -42,7 +42,7 @@ namespace Booking.Web.Controllers
                     HttpOnly = true,
                     Expires = DateTime.UtcNow.AddMinutes(15),
                     Secure = true, // Ensure HTTPS
-                    SameSite = SameSiteMode.Strict
+                    SameSite = SameSiteMode.Lax
                 };
                 Response.Cookies.Append("jwtToken", response.JwtToken, cookieOptions);
 
@@ -52,7 +52,7 @@ namespace Booking.Web.Controllers
                     HttpOnly = true,
                     Expires = DateTime.UtcNow.AddDays(7),
                     Secure = true,
-                    SameSite = SameSiteMode.Strict
+                    SameSite = SameSiteMode.Lax
                 };
                 Response.Cookies.Append("refreshToken", response.RefreshToken, refreshOptions);
 
@@ -83,10 +83,10 @@ namespace Booking.Web.Controllers
 
             if (response.Success)
             {
-                var cookieOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddMinutes(15), Secure = true };
+                var cookieOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddMinutes(15), Secure = true, SameSite = SameSiteMode.Lax };
                 Response.Cookies.Append("jwtToken", response.JwtToken, cookieOptions);
 
-                var refreshOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddDays(7), Secure = true };
+                var refreshOptions = new CookieOptions { HttpOnly = true, Expires = DateTime.UtcNow.AddDays(7), Secure = true, SameSite = SameSiteMode.Lax };
                 Response.Cookies.Append("refreshToken", response.RefreshToken, refreshOptions);
 
                 return RedirectToAction("Index", "Home");

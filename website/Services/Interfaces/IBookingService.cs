@@ -9,5 +9,7 @@ namespace Booking.Web.Services.Interfaces
         Task<RoomType?> GetRoomTypeWithHotelAsync(Guid roomTypeId);
         Task<BookingRecord> CreatePendingBookingAsync(Guid userId, Guid roomTypeId, Guid hotelId, DateTime checkIn, DateTime checkOut, int nights, int guests, decimal totalPrice, string? guestName = null, string? guestEmail = null, string? phoneNumber = null, string? specialRequests = null);
         Task<bool> ConfirmBookingAndRecordPaymentAsync(Guid bookingId, string currency, string transactionId, decimal amount);
+        Task<bool> CancelBookingAsync(Guid bookingId, Guid userId);
+        Task<System.Collections.Generic.IEnumerable<BookingRecord>> GetBookingsByUserIdAsync(Guid userId);
     }
 }

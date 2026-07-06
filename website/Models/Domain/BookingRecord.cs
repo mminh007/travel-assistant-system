@@ -35,7 +35,7 @@ namespace Booking.Web.Models.Domain
         public int GuestCount { get; set; }
 
         [MaxLength(20)]
-        public string Status { get; set; } = "Pending"; // Pending, Confirmed, Cancelled
+        public string Status { get; set; } = "Pending"; // Pending, Success, Cancelled
 
         [MaxLength(100)]
         public string? GuestName { get; set; }

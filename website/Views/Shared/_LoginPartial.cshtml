@@ -2,8 +2,14 @@
 @if (User.Identity != null && User.Identity.IsAuthenticated)
 {
     var fullName = User.Claims.FirstOrDefault(c => c.Type == "FullName")?.Value;
-    <li class="nav-item">
-        <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index" title="Manage">Hello @fullName!</a>
+    <li class="nav-item dropdown dropdown-hover" id="userProfileDropdownContainer">
+        <a class="nav-link dropdown-toggle text-dark" href="#" id="userProfileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Manage">
+            Hello @fullName!
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userProfileDropdown">
+            <li><a class="dropdown-item user-info-item" asp-area="" asp-controller="UserProfile" asp-action="UserInfo">User Info</a></li>
+            <li><a class="dropdown-item history-booking-item" asp-area="" asp-controller="UserProfile" asp-action="HistoryBooking">History Booking</a></li>
+        </ul>
     </li>
     <li class="nav-item">
         <form class="form-inline" asp-area="" asp-controller="Account" asp-action="Logout" method="post">

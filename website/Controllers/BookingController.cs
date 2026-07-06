@@ -53,8 +53,36 @@ namespace Booking.Web.Controllers
         [HttpGet("Booking/Success")]
         public async Task<IActionResult> Success([FromQuery] string session_id)
         {
-            // Here you can verify the session with Stripe if needed,
-            // or fetch the booking record based on session_id if we stored it
+            if (!string.IsNullOrEmpty(session_id))
+            {
+                try
+                {
+                    var service = new Stripe.Checkout.SessionService();
+                    var session = await service.GetAsync(session_id);
+
+                    if (session != null && session.PaymentStatus == "paid")
+                    {
+                        if (Guid.TryParse(session.ClientReferenceId, out var bookingId))
+                        {
+                            var amount = session.AmountTotal.HasValue ? session.AmountTotal.Value / 100m : 0m;
+                            
+                            // This method should be idempotent (it will just update if not already updated)
+                            await _bookingService.ConfirmBookingAndRecordPaymentAsync(
+                                bookingId,
+                                session.Currency,
+                                session.PaymentIntentId ?? session.Id,
+                                amount
+                            );
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log exception, but still show success page
+                    Console.WriteLine($"Error verifying Stripe session: {ex.Message}");
+                }
+            }
+            
             ViewData["SessionId"] = session_id;
             return View();
         }

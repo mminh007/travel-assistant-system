@@ -31,3 +31,80 @@ body {
 }
 .hotel-card-anim { transition: transform 0.3s ease, box-shadow 0.3s ease; }
 .hotel-card-anim:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+
+/* User Profile & Booking History Premium Styles */
+.premium-card {
+    border-radius: 16px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.premium-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 1rem 3rem rgba(0,0,0,.1) !important;
+}
+
+.premium-input, .premium-select {
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.premium-input:focus, .premium-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+}
+
+.premium-btn {
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+.premium-btn:active {
+    transform: scale(0.98);
+}
+
+.custom-pills .nav-link {
+    color: #6c757d;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+}
+.custom-pills .nav-link.active {
+    background-color: #0d6efd;
+    color: white;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.premium-empty-state {
+    background: linear-gradient(145deg, #f8f9fa, #ffffff);
+    border: 1px dashed #dee2e6 !important;
+}
+
+/* Dropdown Hover */
+.dropdown-hover:hover > .dropdown-menu {
+    display: block;
+    animation: fadeInDown 0.3s ease;
+}
+@keyframes fadeInDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.dropdown-menu {
+    border-radius: 12px;
+    margin-top: 0;
+}
+.dropdown-item {
+    border-radius: 8px;
+    margin: 4px;
+    width: calc(100% - 8px);
+    transition: background-color 0.2s;
+}
+.dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #0d6efd;
+}

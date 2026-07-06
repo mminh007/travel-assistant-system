@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Stripe.Checkout;
 using Stripe;
 using Booking.Web.Services.Interfaces;
+using Booking.Web.Models.DTOs;
 
 namespace Booking.Web.Controllers
 {
@@ -94,6 +95,61 @@ namespace Booking.Web.Controllers
             return Ok(new { clientSecret = session.ClientSecret });
         }
         
+        [HttpPost("pay-pending-booking/{id}")]
+        [Authorize]
+        public async Task<IActionResult> PayPendingBooking(Guid id)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var _dbContext = HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var booking = await _dbContext.Bookings
+                .Include(b => b.RoomType)
+                .ThenInclude(rt => rt.Hotel)
+                .FirstOrDefaultAsync(b => b.Id == id && b.UserId == userId);
+
+            if (booking == null || booking.Status != "Pending")
+            {
+                return NotFound("Booking not found or not in pending state.");
+            }
+
+            var domain = $"{Request.Scheme}://{Request.Host}";
+            var options = new SessionCreateOptions
+            {
+                PaymentMethodTypes = new List<string> { "card" },
+                UiMode = "hosted_page",
+                SuccessUrl = $"{domain}/Booking/Success?session_id={{CHECKOUT_SESSION_ID}}",
+                CancelUrl = $"{domain}/UserProfile/HistoryBooking",
+                LineItems = new List<SessionLineItemOptions>
+                {
+                    new SessionLineItemOptions
+                    {
+                        PriceData = new SessionLineItemPriceDataOptions
+                        {
+                            UnitAmount = (long)(booking.TotalPrice),
+                            Currency = "vnd",
+                            ProductData = new SessionLineItemPriceDataProductDataOptions
+                            {
+                                Name = $"{booking.RoomType.Hotel.Name} - {booking.RoomType.Name}",
+                                Description = $"{booking.TotalNights} night(s) from {booking.CheckInDate:yyyy-MM-dd} to {booking.CheckOutDate:yyyy-MM-dd}"
+                            },
+                        },
+                        Quantity = 1,
+                    },
+                },
+                Mode = "payment",
+                ClientReferenceId = booking.Id.ToString(),
+            };
+
+            var service = new SessionService();
+            Session session = service.Create(options);
+
+            return Ok(new { url = session.Url });
+        }
+        
         [HttpPost("webhook")]
         public async Task<IActionResult> Webhook()
         {
@@ -129,15 +185,4 @@ namespace Booking.Web.Controllers
         }
     }
 
-    public class CreateCheckoutRequest
-    {
-        public Guid RoomTypeId { get; set; }
-        public DateTime CheckIn { get; set; }
-        public DateTime CheckOut { get; set; }
-        public int Guests { get; set; }
-        public string? GuestName { get; set; }
-        public string? GuestEmail { get; set; }
-        public string? PhoneNumber { get; set; }
-        public string? SpecialRequests { get; set; }
-    }
 }
