@@ -22,19 +22,19 @@
 
 ## 1. Tổng quan về Kiến trúc V2 (Upgraded)
 
-Kiến trúc **Cognitive Graph V2** được nâng cấp toàn diện để giải quyết các hạn chế của phiên bản V1 liên quan đến **nhiễu ngữ cảnh (context drift)**, **vòng lặp phản hồi vô tận (infinite loops)**, và **chất lượng dữ liệu đầu ra**. 
+Kiến trúc **Cognitive Graph V2** được nâng cấp toàn diện thông qua quá trình tái cấu trúc (refactoring) để giải quyết các hạn chế liên quan đến lỗi JSON parsing, vòng lặp phản hồi vô tận, và chi phí LLM.
 
-Các cải tiến cốt lõi bao gồm:
-*   **Context Sandboxing (Cô lập ngữ cảnh):** Xóa bỏ các message trung gian của các task trước khi chuyển sang task mới bằng `RemoveMessage`. Các phát hiện quan trọng được chắt lọc thành `findings` và truyền sang task tiếp theo qua system prompt để chống tràn context.
-*   **Confidence-based Fast-Fail (Thất bại nhanh dựa trên độ tin cậy):** Nếu điểm tin cậy trung bình của executor thấp (< 0.6), hệ thống sẽ chuyển trực tiếp sang node `self_correct` để sửa sai mà không đi qua `critic_agent` nhằm tiết kiệm chi phí LLM.
-*   **Structured Outputs:** Định nghĩa cấu trúc đầu ra nghiêm ngặt cho Executor (`ExecutorOutput`, `Finding`) và Critic (`CriticOutput` với 4 chiều đánh giá chi tiết).
-*   **Reporting Engine:** Node `final_synthesizer` tổng hợp các findings có cấu trúc và raw results từ tất cả các task đã hoàn thành để viết nên một báo cáo Markdown hoàn chỉnh, có Bibliography ở cuối.
+Các quyết định kiến trúc cốt lõi bao gồm:
+1. **2-Phase Content/Extraction Separation:** Các node Executor trả về Markdown tự do. Một node `finding_extractor` chuyên biệt sẽ phân tích và trích xuất cấu trúc dữ liệu JSON (Pydantic schema) ở giai đoạn sau, loại bỏ hoàn toàn lỗi `JSONDecodeError`.
+2. **Complexity-Aware Routing:** Phân loại độ phức tạp tại cửa ngõ. Các yêu cầu đơn giản bỏ qua hoàn toàn Planner (tiết kiệm chi phí). Các yêu cầu phức tạp được phân rã thành hàng đợi các task.
+3. **Programmatic Safeguards:** Mọi nguy cơ lặp vô tận đều được ngăn chặn bằng các hằng số cấu hình cứng, được thực thi bên ngoài LLM prompts (trong các hàm conditional edges).
+4. **Context Sandboxing:** Xóa bỏ các message trung gian của các task trước khi chuyển sang task mới. Các phát hiện quan trọng được chắt lọc thành `findings` và truyền sang task tiếp theo qua system prompt để chống tràn context.
 
 ---
 
 ## 2. AgentState — Schema trạng thái
 
-Toàn bộ dữ liệu truyền giữa các node được quản lý thông qua `AgentState` (`TypedDict`). LangGraph quản lý tính bất biến (immutability), mỗi node trả về một dictionary chứa các trường cần cập nhật hoặc bổ sung vào state.
+Toàn bộ dữ liệu truyền giữa các node được quản lý thông qua `AgentState` (`TypedDict`).
 
 ```
 AgentState
@@ -44,32 +44,26 @@ AgentState
 │
 ├── ── PHASE 1: GUARDRAIL & INTENT CLASSIFICATION ──────────────
 ├── is_in_domain        → True nếu là yêu cầu du lịch (booking/faq), False nếu ngoài lề
-├── intent_category     → Phân loại ý định ("hotel_booking" | "flight_booking" | "travel_faq" | "itinerary_planning" | "out_of_domain")
+├── intent_category     → Phân loại ý định ("hotel_booking" | "flight_booking" | "system_navigation_faq" | "itinerary_planning")
 ├── complexity          → Mức độ phức tạp ("low" | "medium" | "high")
 ├── objective           → Mục tiêu tổng quát chung
+├── detected_language   → Ngôn ngữ được phát hiện của user prompt
 │
 ├── ── PHASE 2: WORKFLOW MEMORY (PROCEDURAL STATE) ──────────────
-├── tasks               → Danh sách tasks có cấu trúc:
-│                         List[{
-│                           "id": int, 
-│                           "desc": str, 
-│                           "status": "pending" | "completed", 
-│                           "target_agent": str, 
-│                           "result": str (Raw detailed markdown),
-│                           "findings": List[Finding] (Structured statements + confidence)
-│                         }]
+├── tasks               → Danh sách tasks có cấu trúc (dict)
 ├── current_task_id     → ID của sub-task đang thực thi
 │
 ├── ── PHASE 3: LOOP MANAGEMENT & SAFEGUARDS ────────────────────
 ├── iteration_count     → Số vòng ReAct đã thực hiện của task hiện tại (max 8)
 ├── tool_call_count     → Tổng số tool đã gọi xuyên suốt graph (max 10)
-├── action_history      → Danh sách MD5 hash của các tool calls để tránh gọi trùng (duplicate)
-├── rework_count        → Số lần rework từ Critic -> Executor (max 2)
+├── action_history      → Danh sách MD5 hash của các tool calls để tránh gọi trùng
+├── rework_count        → Số lần rework từ Evaluator -> Executor (max 2)
 │
 └── ── EVALUATION MEMORY ─────────────────────────────────────────
-    ├── critic_feedback     → Phản hồi chi tiết từ Critic
-    ├── reflection_notes    → Ghi chú hành động chỉnh sửa từ Reflection
+    ├── evaluator_feedback  → Phản hồi chi tiết từ Evaluator
     ├── needs_rework        → Boolean chỉ định có cần executor làm lại không
+    ├── raw_executor_output → Văn bản Markdown gốc từ Executor (đã qua extractor)
+    ├── extracted_findings  → Tập hợp các phát hiện quan trọng dạng JSON
     └── final_answer        → (Dành riêng) Câu trả lời tổng hợp cuối cùng
 ```
 
@@ -77,142 +71,63 @@ AgentState
 
 ## 3. Bảng đăng ký Node (Node Registry)
 
-| # | Tên Node | Chức năng chính | LLM Tier được sử dụng | Loại Node |
+| # | Tên Node | Chức năng chính | LLM Tier | Loại Node |
 |---|---|---|---|---|
-| 0 | `input_guardrail` | Phân loại ý định người dùng, từ chối câu hỏi ngoài lề (out-of-domain). | Tier 1 (Fast - `gpt-4o-mini`) | Async Node |
-| 1 | `planner` | Phân rã mục tiêu du lịch phức tạp thành chuỗi 2-4 sub-tasks. | Tier 2 (Balanced - `gpt-4o`) | Async Node |
-| 2 | `direct_executor_init` | Khởi tạo trạng thái cho luồng bypass khi complexity='low' (Không dùng LLM). | *(Không dùng LLM)* | Async Node |
-| 3 | `travel_react_agent` | Executor ReAct xử lý các câu hỏi du lịch, khách sạn, chuyến bay bằng RAG. | Tier 2 (Balanced - `gpt-4o`) | Async Node |
-| 4 | `out_of_domain` | Xử lý các câu hỏi không liên quan đến du lịch bằng cách từ chối lịch sự. | *(Không dùng LLM)* | Async Node |
-| 6 | `action_tracker` | Interceptor ghi lại hash và tăng bộ đếm tool trước khi tool chạy. | *(Không dùng LLM)* | Async Node |
-| 7 | `tools` | Thực thi các MCP tool calls được yêu cầu bởi executor. | *(External)* | ToolNode |
-| 8 | `self_correct` | Bổ sung câu lệnh yêu cầu làm lại trực tiếp khi confidence thấp mà không qua Critic. | *(Không dùng LLM)* | Async Node |
-| 9 | `critic_agent` | Đánh giá chất lượng của Executor dựa trên 4 chỉ số điểm từ 1-10. | Tier 2 (Balanced - `gpt-4o`) | Async Node |
-| 10 | `reflection_agent` | Tổng hợp đánh giá của Critic, quyết định rework và đưa ra lời khuyên. | Tier 2 (Balanced - `gpt-4o`) | Async Node |
-| 11 | `task_manager` | Lưu kết quả, findings, cập nhật trạng thái task, thực hiện Context Sandboxing. | *(Không dùng LLM)* | Async Node |
-| 12 | `final_synthesizer` | Tổng hợp toàn bộ findings & kết quả thô của các task thành báo cáo hoàn chỉnh. | Tier 2 (Balanced - `gpt-4o`) | Async Node |
+| 0 | `input_guardrail` | Phân loại ý định, từ chối câu hỏi ngoài lề, đánh giá độ phức tạp. | Tier 1 (Fast) | Async Node |
+| 1 | `out_of_domain` | Trả lời tĩnh cho các câu hỏi không thuộc chuyên môn du lịch. | *(Không dùng LLM)* | Async Node |
+| 2 | `support_agent` | Xử lý FAQ và điều hướng hệ thống cơ bản mà không cần vào luồng sâu. | Tier 2 (Balanced) | Async Node |
+| 3 | `planner` | Phân rã mục tiêu phức tạp thành chuỗi 2-4 sub-tasks. | Tier 2 (Balanced) | Async Node |
+| 4 | `direct_executor_init` | Khởi tạo trạng thái cho luồng bypass khi complexity='low'. | *(Không dùng LLM)* | Async Node |
+| 5 | `travel_react_agent` | Executor ReAct chung xử lý lập luận, gọi tools và xuất Markdown. | Tier 2 (Balanced) | Async Node |
+| 6 | `action_tracker` | Interceptor ghi nhận hash và đếm tool calls trước khi thực thi. | *(Không dùng LLM)* | Async Node |
+| 7 | `tools` | Thực thi MCP tool calls (LangChain ToolNode). | *(External)* | ToolNode |
+| 8 | `finding_extractor` | Đọc Markdown của Executor và trích xuất ra JSON schema nghiêm ngặt. | Tier 1 (Fast) | Async Node |
+| 9 | `evaluator_agent` | Gộp chung đánh giá chất lượng (Critic) và Quyết định làm lại (Reflection). | Tier 2 (Balanced) | Async Node |
+| 10 | `task_manager` | Lưu kết quả, chuyển tiếp task, thực hiện Context Sandboxing. | *(Không dùng LLM)* | Async Node |
+| 11 | `final_synthesizer` | Tổng hợp toàn bộ findings & kết quả thô của các task thành báo cáo hoàn chỉnh. | Tier 2 (Balanced) | Async Node |
 
 ---
 
 ## 4. Mô tả chi tiết từng Node
 
 ### 4.1. Node `input_guardrail`
-*   **File nguồn:** `nodes.py → node_input_guardrail()`
 *   **Vị trí:** Điểm bắt đầu (Entry Point) của đồ thị.
-*   **Đặc điểm:** Sử dụng **Structured Output** (`with_structured_output`) ánh xạ vào schema `InputGuardrailOutput`.
-*   **Nhiệm vụ:**
-    1. Đọc tin nhắn cuối cùng của người dùng.
-    2. Đọc tệp nguyên tắc `workflow.md` (được lưu trong cache qua `@lru_cache`).
-    3. Phân tích và đưa ra quyết định:
-        *   `is_in_domain`: Xác định xem câu hỏi có thuộc domain du lịch không.
-        *   `complexity`: Độ phức tạp (`low`, `medium`, `high`).
-        *   `intent_category`: Phân loại ý định cụ thể (khách sạn, chuyến bay, FAQ).
-        *   `objective`: Mục tiêu cô đọng phục vụ cho việc đánh giá chất lượng.
-*   **Fallback:** Nếu lỗi xảy ra, hệ thống tự động gán mặc định `current_domain="travel_react_agent"`, `complexity="low"`, `required_agents=[]`.
-
----
+*   **Đặc điểm:** Sử dụng Tier 1 LLM.
+*   **Nhiệm vụ:** Phân loại độ phức tạp (`complexity`), kiểm tra tính hợp lệ (`is_in_domain`), và xác định ý định (`intent_category`).
+*   **Điều hướng:** Các câu hỏi ngoài lề đi tới `out_of_domain`, câu hỏi hệ thống tới `support_agent`. Các tác vụ dễ tới `direct_executor_init`, còn lại tới `planner`.
 
 ### 4.2. Node `planner`
-*   **File nguồn:** `nodes.py → node_planner_agent()`
-*   **Điều kiện chạy:** Chạy khi `complexity = "medium"` hoặc `"high"`.
-*   **Đặc điểm:** Sử dụng `with_structured_output` ánh xạ vào schema `PlannerOutput`.
-*   **Nhiệm vụ:**
-    1. Nhận mục tiêu (`objective`) từ Router.
-    2. Phân rã mục tiêu này thành 2-4 sub-task tuần tự (ví dụ: Task 1 tìm tài liệu, Task 2 phân tích, Task 3 so sánh).
-    3. Gán agent chịu trách nhiệm (`target_agent`) cho từng task cụ thể.
-*   **Fallback:** Nếu gặp lỗi, hệ thống tự động tạo ra một task duy nhất từ prompt gốc của user để tránh làm gián đoạn luồng chạy.
-
----
+*   **Nhiệm vụ:** Hoạt động như Project Manager, phân rã mục tiêu thành 2-4 tác vụ nối tiếp (TaskItems). Luôn truyền thẳng các tác vụ tới `travel_react_agent`.
 
 ### 4.3. Node `direct_executor_init`
-*   **File nguồn:** `nodes.py → node_direct_executor_init()`
-*   **Điều kiện chạy:** Chạy khi `complexity = "low"`.
-*   **Đặc điểm:** Node chức năng thuần túy, không tốn chi phí LLM.
-*   **Nhiệm vụ:**
-    1. Bỏ qua bước lập kế hoạch của Planner để tiết kiệm tài nguyên.
-    2. Tạo một task duy nhất chứa prompt gốc của người dùng.
-    3. Thiết lập mặc định cho tất cả các chỉ số đếm vòng lặp, công cụ và rework về `0`.
+*   **Nhiệm vụ:** Bỏ qua `planner` với các task có độ phức tạp thấp. Tạo 1 synthetic task duy nhất bọc lại prompt của user, thiết lập các biến vòng lặp, và đi thẳng vào `travel_react_agent`.
 
----
+### 4.4. Node `travel_react_agent` (Executor)
+*   **Nhiệm vụ:** Vòng lặp **Reason-and-Act (ReAct)** chính yếu.
+*   **Đầu ra:** Xuất ra kết quả dạng **plain Markdown tự do**, KHÔNG yêu cầu LLM phải format JSON tại bước này để tránh lỗi schema parsing khi trả về các code snippets hay bảng biểu.
+*   Sử dụng Hybrid Search RAG và hệ thống MCP Tools.
 
-### 4.4. Node Executor (`travel_react_agent`)
-*   **File nguồn:** `nodes.py` (`node_travel_react_agent`)
-*   **Chức năng:** Các chuyên gia xử lý tác vụ thông qua vòng lặp **ReAct (Reason-and-Act)**.
-*   **Cơ chế hoạt động:**
-    1. Thực hiện tìm kiếm RAG trên database tương ứng thông qua Hybrid Search (Dense + BM25) để lấy ngữ cảnh.
-    2. Tổng hợp system prompt bao gồm: Chỉ dẫn ReAct tiêu chuẩn, tệp nguyên tắc `workflow.md`, kết quả RAG, danh sách các findings của task trước (Context Sandboxing) và chỉ dẫn bắt buộc xuất ra định dạng JSON.
-    3. **Bind Tools O(1) Caching:** Lấy LLM đã được cấu hình sẵn các tool tương ứng với domain thông qua bộ nhớ cache `_BOUND_LLM_CACHE`.
-    4. Trả về `AIMessage` chứa các hành động gọi công cụ (`tool_calls`) hoặc chứa câu trả lời cuối cùng dưới định dạng JSON khớp với schema `ExecutorOutput`:
-        *   `result`: Văn bản Markdown chi tiết của task hiện tại.
-        *   `findings`: Danh sách các phát hiện quan trọng phục vụ lập luận của các task sau.
+### 4.5. Node `action_tracker` & `tools`
+*   **`action_tracker`:** Hashing tool call param (MD5) để so sánh trong history, tăng biến đếm ngân sách tool (tool budget tracker).
+*   **`tools`:** LangChain `ToolNode` thực thi MCP servers. Trả kết quả ngược lại cho `travel_react_agent`.
 
-> [!NOTE]
-> Node `travel_react_agent` áp dụng nguyên lý **Critic Before Tool** (tự chất vấn trước khi dùng tool) cùng **Confidence-Based Stopping** để tự dừng khi đã có đủ thông tin chất lượng.
+### 4.6. Node `finding_extractor`
+*   **Vị trí:** Ngay sau khi Executor hoàn thành suy luận (không gọi tool nữa).
+*   **Đặc điểm:** Sử dụng cấu trúc đầu ra nghiêm ngặt (Structured Output) với Tier 1 LLM (nhanh, chi phí thấp).
+*   **Nhiệm vụ:** Bóc tách kết quả văn bản tự do của Executor thành 2 phần: `raw_executor_output` (tóm tắt kết quả) và `extracted_findings` (mảng các phát hiện quan trọng có cấu trúc rõ ràng). Đây là trái tim của cơ chế **2-Phase Extraction**.
 
----
+### 4.7. Node `evaluator_agent`
+*   **Nhiệm vụ:** Là sự kết hợp của Critic và Reflection agent cũ.
+*   Chấm điểm chất lượng (sử dụng công cụ, trích nguồn, độ chính xác, độ mới) và ngay lập tức đưa ra quyết định `needs_rework` (True/False) cùng nhận xét sửa đổi.
+*   Kiểm tra `rework_count` để điều hướng về lại Executor hoặc đi tiếp sang `task_manager`.
 
-### 4.5. Node `action_tracker` và Node `tools`
-*   **File nguồn:** `workflow.py → action_tracker_node()` và `ToolNode(mcp_tools)`
-*   **Nhiệm vụ:**
-    *   `action_tracker`: Đóng vai trò là chốt chặn ghi nhận (Interceptor). Trước khi bất kỳ công cụ nào chạy, nó sẽ tạo MD5 hash cho công cụ kèm tham số, đẩy vào `action_history` và tăng `tool_call_count`. Điều này giúp ngăn chặn gọi trùng công cụ dù công cụ đó có thực thi thành công hay không.
-    *   `tools`: Node mặc định của LangGraph đảm nhận việc gọi trực tiếp các MCP servers ngoài để lấy kết quả (như tìm kiếm Web, tính toán toán học) và trả về `ToolMessage`.
+### 4.8. Node `task_manager`
+*   **Nhiệm vụ:** Trình quản lý tác vụ (không tốn LLM).
+*   Lưu `raw_executor_output` và `extracted_findings` vào bộ nhớ của tác vụ hiện hành.
+*   Thực hiện **Context Sandboxing**: Xóa lịch sử hội thoại trung gian của tác vụ vừa xong, bơm các findings vào làm system context cho tác vụ kế tiếp.
 
----
-
-### 4.6. Node `self_correct`
-*   **File nguồn:** `workflow.py → node_self_correct()`
-*   **Vị trí:** Nhận tín hiệu từ hàm định tuyến `evaluate_tool_hooks` khi executor hoàn thành nhưng có độ tin cậy thấp.
-*   **Nhiệm vụ:**
-    1. Bơm trực tiếp một tin nhắn `HumanMessage` yêu cầu executor tự điều chỉnh: *"Độ tin cậy của kết quả trước đó quá thấp (< 0.6). Vui lòng sử dụng công cụ để tìm kiếm và củng cố bằng chứng trước khi trả lời."*
-    2. Định tuyến thẳng về executor để chạy lại mà không cần đi qua Critic/Reflection, giảm thiểu 2 lượt gọi LLM Tier 2 đắt đỏ.
-
----
-
-### 4.7. Node `critic_agent`
-*   **File nguồn:** `nodes.py → node_critic_agent()`
-*   **Nhiệm vụ:**
-    1. Đánh giá kết quả của executor dựa trên cấu trúc nghiêm ngặt `CriticOutput`.
-    2. Cho điểm từ 1 đến 10 đối với 4 khía cạnh chất lượng đầu ra:
-        *   `tool_quality_score`: Chất lượng và tính hợp lý khi gọi tool.
-        *   `evidence_quality_score`: Độ mạnh của các bằng chứng bảo vệ lập luận.
-        *   `citation_quality_score`: Chất lượng trích nguồn dữ liệu.
-        *   `freshness_score`: Tính cập nhật mới của thông tin.
-    3. Kiểm tra xem mục tiêu ban đầu (`objective`) đã được hoàn thành hay chưa (`objective_met`).
-
----
-
-### 4.8. Node `reflection_agent`
-*   **File nguồn:** `nodes.py → node_reflection_agent()`
-*   **Nhiệm vụ:**
-    1. Dựa trên feedback chi tiết và điểm số từ `critic_agent` để đưa ra quyết định cuối cùng có cần làm lại (Rework) hay không (`needs_rework`).
-    2. Tạo lời khuyên hành động cụ thể (`actionable_advice`) hướng dẫn Executor cách sửa đổi trong lượt chạy kế tiếp.
-    3. Tăng bộ đếm `rework_count` nếu yêu cầu rework được kích hoạt.
-
----
-
-### 4.9. Node `task_manager`
-*   **File nguồn:** `nodes.py → node_task_manager()`
-*   **Nhiệm vụ:**
-    1. Parse output dạng JSON của executor để lấy thông tin chi tiết về `result` và `findings`.
-    2. Lưu trữ chúng trực tiếp vào cấu trúc task hiện tại trong State.
-    3. Đánh dấu trạng thái task hiện tại thành `"completed"`.
-    4. **Context Sandboxing:** Kiểm tra nếu còn task tiếp theo trong danh sách:
-        *   Bơm danh sách `RemoveMessage` để xóa toàn bộ các tin nhắn ReAct trung gian trong luồng lịch sử `messages` (chỉ giữ lại prompt gốc).
-        *   Thiết lập lại các bộ đếm `iteration_count=0`, `tool_call_count=0`, `rework_count=0` về mặc định.
-        *   Định hướng dòng chảy sang task mới.
-    5. Nếu toàn bộ task đã hoàn tất, chuyển tiếp sang node tổng hợp.
-
----
-
-### 4.10. Node `final_synthesizer`
-*   **File nguồn:** `nodes.py → node_final_synthesizer()`
-*   **Nhiệm vụ:**
-    1. Tập hợp các kết quả rời rạc từ các task đã được `task_manager` lưu trữ.
-    2. Trích xuất toàn bộ `findings` làm nền tảng.
-    3. Sử dụng LLM Tier 2 xây dựng một báo cáo cuối cùng hoàn chỉnh:
-        *   **Executive Summary:** Tóm tắt báo cáo dựa trên các findings có độ tin cậy cao.
-        *   **Detailed Analysis:** Trình bày chi tiết từng khía cạnh dựa trên kết quả thô.
-        *   **Bibliography/Sources:** Liệt kê đầy đủ các nguồn trích dẫn được trích xuất từ dữ liệu.
+### 4.9. Node `final_synthesizer`
+*   **Nhiệm vụ:** Đọc lại tất cả các tasks đã hoàn thành. Kết hợp văn bản thô và trích xuất để sinh ra một Markdown report thống nhất, có phần tổng quan và danh mục trích nguồn mạch lạc.
 
 ---
 
@@ -221,68 +136,88 @@ AgentState
 ### 5.1. Sơ đồ luồng tổng quan (Workflow Diagram)
 
 ```mermaid
-graph TD
-    Start([User Message]) --> IG[input_guardrail]
-    
-    %% Guardrail Gate
-    IG -- is_in_domain = False --> OOD[out_of_domain]
-    OOD --> End([END])
-    
-    IG -- is_in_domain = True, complexity = low --> DEI[direct_executor_init]
-    IG -- is_in_domain = True, complexity = med/high --> PL[planner]
-    
-    %% Direct Init & Planner routing to Executors
-    DEI --> TRA[travel_react_agent]
-    PL --> TRA
-    
-    %% ReAct Tool Hooks
-    TRA --> ETH[evaluate_tool_hooks]
-    
-    %% Hooks Branches
-    ETH --> |has tools| AT[action_tracker]
-    AT --> TL[tools]
-    TL -- route_back_to_agent --> TRA
-    
-    %% Fast-Fail Branch
-    ETH --> |confidence < 0.6| SC[self_correct]
-    SC -- route_back_to_agent --> TRA
-    
-    %% Evaluation Branch
-    ETH --> |no tools & confidence >= 0.6| CR[critic_agent]
-    CR --> RF[reflection_agent]
-    
-    %% Rework Gate
-    RF -- route_from_reflection --> |needs_rework=True & rework < max| TRA
-    RF -- route_from_reflection --> |needs_rework=False OR rework >= max| TM[task_manager]
-    
-    %% Task Manager Loop
-    TM -- route_from_task_manager --> |next task pending| TRA
-    TM -- route_from_task_manager --> |all tasks completed| FS[final_synthesizer]
-    
-    FS --> End([END])
+flowchart TD
+    START([" 🚀 User Request "]) --> IG
+
+    subgraph PHASE0["⬛ Phase 0 — Intent Classification"]
+        IG["🧠 input_guardrail\nTier 1 LLM\nSets: is_in_domain, intent, complexity"]
+        OOD["🚫 out_of_domain\nStatic Response"]
+        SA["ℹ️ support_agent\nHandles FAQ/Navigation"]
+    end
+
+    IG -- "is_in_domain = False" --> OOD
+    IG -- "intent = 'system_navigation_faq'" --> SA
+    IG -- "complexity = 'low'" --> DEI
+    IG -- "complexity = 'medium' / 'high'" --> PL
+
+    OOD --> END([" ✅ Final Response "])
+    SA --> END
+
+    subgraph PHASE1["⬛ Phase 1 — Planning"]
+        PL["📋 planner\nTier 2 LLM\nDecomposes into 2–4 TaskItems"]
+        DEI["⚡ direct_executor_init\nNo LLM · 1 Synthetic Task\nCost-saving bypass"]
+    end
+
+    PL --> GM
+    DEI --> GM
+
+    subgraph PHASE2["⬛ Phase 2 — Execution ReAct Loop"]
+        direction TB
+        GM["💡 travel_react_agent\nTier 2 · Web, Coding, Planning\nOutputs: plain Markdown"]
+
+        AT["📝 action_tracker\nHashes tool calls\nIncrements counters"]
+        TOOLS["🔧 tools\nLangChain ToolNode\nMCP Tool Execution"]
+
+        GM -- "has tool_calls?\n[evaluate_tool_hooks]" --> HOOKS
+        HOOKS{{"🛡️ evaluate_tool_hooks\n① No tool calls → extractor\n② Max iterations → extractor\n③ Budget limit → extractor\n④ Duplicate call → extractor\n⑤ Valid call → action_tracker"}}
+        HOOKS -- "execute_tools" --> AT
+        AT --> TOOLS
+        TOOLS -- "route_back_to_agent()" --> GM
+    end
+
+    HOOKS -- "finding_extractor" --> FE
+
+    subgraph PHASE3["⬛ Phase 3 — 2-Phase Extraction"]
+        FE["🔍 finding_extractor\nTier 1 · Schema\nExtracts: result_summary + findings\nWrites: raw_executor_output, extracted_findings"]
+    end
+
+    FE --> EA
+
+    subgraph PHASE4["⬛ Phase 4 — Evaluation Loop"]
+        EA["⚖️ evaluator_agent\nTier 2\nScores quality & sets needs_rework\nWrites: feedback, needs_rework"]
+    end
+
+    EA -- "needs_rework=True\nrework_count < MAX_REWORK_CYCLES (2)" --> GM
+    EA -- "needs_rework=False\nOR rework_count ≥ 2" --> TM
+
+    subgraph PHASE5["⬛ Phase 5 — Task Iteration & Synthesis"]
+        TM["🗂️ task_manager\nMarks task completed\nSaves findings to task record\nContext Sandboxing"]
+        FS["✨ final_synthesizer\nTier 2 · Free-form Markdown\nMerges all task results\nDeduplicates citations"]
+    end
+
+    TM -- "Tasks remaining\n→ next task" --> GM
+    TM -- "All tasks done" --> FS
+
+    FS --> END
 ```
 
 ### 5.2. Bản đồ các nhánh rẽ điều kiện (Conditional Edges Map)
 
-Quy tắc chuyển dịch trạng thái giữa các node được định nghĩa chặt chẽ bằng code:
-
 1.  **Sau `input_guardrail` (`route_from_guardrail`):**
-    *   `is_in_domain = False` $\rightarrow$ rẽ nhánh `out_of_domain`.
-    *   `is_in_domain = True` và Độ phức tạp `low` $\rightarrow$ rẽ nhánh `direct_executor_init`.
-    *   `is_in_domain = True` và Độ phức tạp `medium`/`high` $\rightarrow$ rẽ nhánh qua `planner`.
-2.  **Sau `planner` và `direct_executor_init` (`route_from_planner`):**
-    *   Chuyển sang `travel_react_agent`.
-3.  **Sau Executor (`evaluate_tool_hooks`):**
-    *   Nếu có yêu cầu gọi công cụ $\rightarrow$ đi tới `action_tracker` (sau đó chạy `tools`).
-    *   Nếu kết thúc gọi công cụ nhưng điểm tin cậy trung bình thu được < 0.6 $\rightarrow$ kích hoạt Fast-Fail đi tới `self_correct`.
-    *   Nếu kết thúc gọi công cụ bình thường và tin cậy $\ge$ 0.6 $\rightarrow$ đi tới `critic_agent`.
-    *   Nếu chạm các hạn chế an toàn (Safeguards) $\rightarrow$ cưỡng chế kết thúc và chuyển tới `critic_agent`.
-4.  **Sau `reflection_agent` (`route_from_reflection`):**
-    *   Nếu `needs_rework` là True và `rework_count < MAX_REWORK_CYCLES` $\rightarrow$ quay lại executor để sửa lỗi.
-    *   Nếu không cần rework hoặc vượt giới hạn rework $\rightarrow$ đi tới `task_manager`.
-5.  **Sau `task_manager` (`route_from_task_manager`):**
-    *   Nếu còn task ở trạng thái "pending" $\rightarrow$ quay lại executor tương ứng với task mới.
-    *   Nếu tất cả các task đã hoàn tất $\rightarrow$ đi tới `final_synthesizer`.
+    *   `is_in_domain = False` $\rightarrow$ `out_of_domain`.
+    *   `intent_category == 'system_navigation_faq'` $\rightarrow$ `support_agent`.
+    *   `complexity == 'low'` $\rightarrow$ `direct_executor_init`.
+    *   Mặc định / Khác $\rightarrow$ `planner`.
+2.  **Sau `travel_react_agent` (`evaluate_tool_hooks`):**
+    *   Nếu có tool call hợp lệ $\rightarrow$ đi tới `action_tracker`.
+    *   Nếu gặp lỗi lặp vô tận, trùng tool, hay cạn ngân sách $\rightarrow$ ép luồng chạy tới `finding_extractor`.
+    *   Nếu Executor hoàn thành không gọi tool $\rightarrow$ đi tới `finding_extractor`.
+3.  **Sau `evaluator_agent` (`route_from_evaluator`):**
+    *   `needs_rework = True` VÀ `rework_count < 2` $\rightarrow$ đi tới `travel_react_agent` (Rework).
+    *   `needs_rework = False` HOẶC `rework_count >= 2` $\rightarrow$ đi tới `task_manager`.
+4.  **Sau `task_manager` (`route_from_task_manager`):**
+    *   Nếu `current_task_id` hợp lệ (còn task) $\rightarrow$ quay lại `travel_react_agent` với task mới.
+    *   Nếu hết task $\rightarrow$ đi tới `final_synthesizer`.
 
 ---
 
@@ -293,66 +228,29 @@ Quy tắc chuyển dịch trạng thái giữa các node được định nghĩa
 Khi một tác vụ ReAct chạy, nó sinh ra rất nhiều lượt Thought, Action và Tool Observation (lên tới hàng chục nghìn tokens). Nếu giữ nguyên lịch sử này sang Task 2, LLM sẽ bị quá tải context, gây nhiễu và giảm chất lượng lập luận.
 
 **Cách hoạt động của Sandboxing:**
-1. Khi `task_manager` phát hiện hoàn thành một tác vụ và chuyển sang tác vụ mới, nó trả về một mảng `RemoveMessage` tương ứng với mọi message trung gian phát sinh trong task đó.
-2. Nó giữ lại kết quả tinh gọn dưới dạng `findings` (mỗi finding gồm statement và confidence).
-3. Khi Task tiếp theo bắt đầu, hàm `_build_executor_instructions` quét toàn bộ các task trước đó, tập hợp các findings lại thành định dạng XML:
-   ```xml
-   <previous_tasks_findings>
-   Task 1 Finding: Attention mechanism improves translation of long sentences (Confidence: 0.95)
-   </previous_tasks_findings>
-   ```
-4. Đoạn text này được đưa thẳng vào System Message của task mới. Nhờ đó, executor mới vừa biết được tri thức cũ, vừa có context hoàn toàn sạch sẽ (chỉ khoảng vài trăm tokens).
+1. Khi `task_manager` phát hiện hoàn thành một tác vụ và chuyển sang tác vụ mới, nó tạo ra các `RemoveMessage` để dọn dẹp các tin nhắn rác sinh ra trong Task 1.
+2. Nó chuyển `extracted_findings` của Task 1 vào prompt ngữ cảnh cho Task 2. Nhờ đó, Executor xử lý Task 2 chỉ nhận được một lượng thông tin chắt lọc nhất định mà không cần đọc lại toàn bộ Tool Logs của Task 1.
 
----
+### 6.2. 2-Phase Information Extraction
 
-### 6.2. Confidence-based Fast-Fail (Tự động tự sửa sai nhanh)
+Việc ép LLM phải suy luận logic (ReAct), quyết định gọi tool, đồng thời xuất ra chuỗi JSON định dạng khắt khe là nguyên nhân chính gây lỗi `JSONDecodeError` trong các Graph trước đây. V2 xử lý triệt để việc này bằng:
+- **Phase 1 (Creation):** `travel_react_agent` cứ tự do suy nghĩ và giao tiếp bằng văn bản (như ChatGPT thông thường).
+- **Phase 2 (Extraction):** Khi Phase 1 hoàn tất, `finding_extractor` (sử dụng model nhanh/rẻ tier 1) đứng ra đọc đoạn văn bản tự do đó và bóc tách thành đối tượng Python có cấu trúc.
 
-Nhằm giảm thiểu việc gọi LLM kiểm định chất lượng (`critic_agent` và `reflection_agent`) khi kết quả đầu ra của Executor hiển nhiên là không đủ tin cậy:
-
-```
-                  ┌───────────────────────────────┐
-                  │ Executor: Output JSON         │
-                  └───────────────┬───────────────┘
-                                  │
-                       [Đánh giá độ tin cậy]
-                                  │
-                 ┌────────────────┴────────────────┐
-                 │                                 │
-           [Tập Findings]                    [Tập Findings]
-        Độ tin cậy TB < 0.6               Độ tin cậy TB >= 0.6
-                 │                                 │
-                 ▼                                 ▼
-         [Node: self_correct]             [Node: critic_agent]
-    (Bơm nhắc nhở yêu cầu tìm thêm)    (Đánh giá toàn diện chất lượng)
-                 │                                 │
-                 ▼                                 ▼
-           (Executor chạy lại)             [Node: reflection_agent]
-```
-
-Cơ chế này tiết kiệm trung bình 40% chi phí tokens của LLM cho các tác vụ cần nhiều lần thử sai do thiếu bằng chứng.
-
----
-
-### 6.3. Công cụ trích xuất findings có cấu trúc
-
-Do Executor sử dụng vòng lặp ReAct, việc ép LLM trả về cấu trúc định dạng bằng `.with_structured_output()` đồng thời với việc duy trì khả năng gọi tool (`.bind_tools()`) là bất khả thi trong LangChain.
-
-V2 giải quyết vấn đề này bằng phương pháp **Structured Prompt Enforcing**:
-1. Tiêm chỉ dẫn xuất định dạng JSON nghiêm ngặt vào System Message (`_build_executor_instructions`).
-2. Khi Executor trả ra tin nhắn văn bản cuối cùng, `task_manager` và `evaluate_tool_hooks` sẽ sử dụng `JsonOutputParser(pydantic_object=ExecutorOutput)` để parse cấu trúc. Nếu parse lỗi, hệ thống sẽ sử dụng toàn bộ nội dung text làm kết quả thô (`result`) và danh sách `findings` để trống để đảm bảo chương trình không bị crash đột ngột.
+Điều này làm cho hệ thống vô cùng bền bỉ (resilient) trước mọi đầu ra kỳ lạ của LLM, đặc biệt là khi LLM sinh ra markdown bảng biểu hoặc code blocks.
 
 ---
 
 ## 7. Safeguards & Giới hạn cứng (Hard Limits)
 
-Để đảm bảo hệ thống không bị lặp vô tận (looping) hoặc tiêu tốn quá nhiều chi phí API khi gặp các câu hỏi hóc búa, đồ thị tích hợp 4 chốt chặn an toàn tại node điều hướng `evaluate_tool_hooks` và `route_from_reflection`:
+Để đảm bảo hệ thống không bị lặp vô tận (looping) hoặc tiêu tốn quá nhiều chi phí API khi gặp các câu hỏi hóc búa, đồ thị tích hợp 4 chốt chặn an toàn tại node điều hướng `evaluate_tool_hooks` và `route_from_evaluator`:
 
 | Giới hạn | Tên hằng số | Mục đích | Cách xử lý khi kích hoạt |
 |---|---|---|---|
-| **Max Iterations** | `MAX_ITERATIONS = 8` | Giới hạn tối đa số lượt Thought-Action trong một task. | Ngắt ReAct loop ngay lập tức và chuyển tiếp sang node `critic_agent`. |
-| **Max Tool Calls** | `MAX_TOOL_CALLS = 10` | Giới hạn tổng số lần gọi tool trong cả vòng đời của session. | Ngắt ReAct loop ngay lập tức và chuyển tiếp sang node `critic_agent`. |
-| **Duplicate Tool Detection** | MD5 hash list | Ngăn chặn việc LLM liên tục gọi một tool với các tham số giống hệt nhau khi bị bí. | Ngắt ReAct loop ngay lập tức và chuyển tiếp sang node `critic_agent`. |
-| **Max Rework Cycles** | `MAX_REWORK_CYCLES = 2` | Tránh việc Critic bắt làm lại quá nhiều lần đối với một task khó. | Cưỡng chế chuyển sang `task_manager` để hoàn thành task hiện tại và đi tiếp. |
+| **Max Iterations** | `MAX_ITERATIONS = 8` | Giới hạn tối đa số lượt Thought-Action trong một task. | Ngắt ReAct loop, chuyển tiếp tới `finding_extractor`. |
+| **Max Tool Calls** | `MAX_TOOL_CALLS = 10` | Giới hạn tổng số lần gọi tool trong cả vòng đời của session. | Ngắt ReAct loop, chuyển tiếp tới `finding_extractor`. |
+| **Duplicate Tool Detection** | MD5 hash list | Ngăn chặn việc LLM liên tục gọi một tool với các tham số giống hệt nhau khi bị bí. | Block tool call hiện tại, chuyển tới `finding_extractor`. |
+| **Max Rework Cycles** | `MAX_REWORK_CYCLES = 2` | Tránh việc Evaluator bắt làm lại quá nhiều lần đối với một task khó. | Cưỡng chế chuyển sang `task_manager` để hoàn thành task hiện tại và đi tiếp. |
 
 ---
 
@@ -372,8 +270,8 @@ Nhằm tối ưu hóa giữa hiệu năng (quality), chi phí (cost) và độ t
              gemini-1.5-flash    gemini-1.5-flash    gemini-1.5-pro
                  │                   │                   │
             Phân loại ý định     General Executor       Deep Research
-            Tối ưu hóa query     Planner & Critic       Toán học phức tạp
-            Vision Detection     Synthesizer & Reflect  Học máy chuyên sâu
+            Trích xuất Finding   Planner & Evaluator    Toán học phức tạp
+            Vision Detection     Synthesizer            Học máy chuyên sâu
 ```
 
 ### 8.1. Dynamic LLM Factory (`get_llm_instance`)
@@ -412,4 +310,3 @@ Do protobuf schema được giữ nguyên để đảm bảo khả năng tương
 1.  **Cache thực thể LLM (`_LLM_INSTANCE_CACHE`):** Cache các đối tượng mô hình dựa trên hash của API key, tên model, base URL và cấu hình max tokens.
 2.  **Cache cấu trúc đầu ra (`_STRUCTURED_LLM_CACHE`):** Lưu trữ kết quả biên dịch của `.with_structured_output(schema)` trên từng thực thể model để tránh dịch JSON Schema lặp đi lặp lại.
 3.  **Cache Bind Tool (`_BOUND_LLM_CACHE`):** Cache các thực thể mô hình đã liên kết với các công cụ MCP chuyên biệt của từng domain trong thời gian **O(1)**.
-
