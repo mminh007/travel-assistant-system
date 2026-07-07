@@ -17,7 +17,7 @@ services:
     networks:
       - agent_network
 
-  rabbitmq_broker:
+  rabbitmq_broker: #  http://localhost:15672 (account: guest / password: guest)
     image: rabbitmq:3-management-alpine
     container_name: booking_rabbitmq
     ports:
@@ -33,7 +33,7 @@ services:
       - agent_network
 
   # 🚀 (Centralized Vector Database)
-  qdrant_server:
+  qdrant_server: # http://localhost:6333/dashboard
     image: qdrant/qdrant:latest
     container_name: booking_qdrant_server
     ports:
@@ -130,7 +130,9 @@ services:
     restart: always
     networks:
       - agent_network
-  prometheus:
+  
+  # 🚀 INTEGRATION: PROMETHEUS TIME-SERIES DATABASE
+  prometheus: #  http://localhost:9090
     image: prom/prometheus:v2.51.0
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -145,8 +147,8 @@ services:
     networks:
       - agent_network
 
-  # 🚀  GRAFANA SERVER
-  grafana:
+  # 🚀  GRAFANA SERVER 
+  grafana: # http://localhost:3001 (account: admin / password: admin)
     image: grafana/grafana:10.4.1
     container_name: booking_grafana
     ports:

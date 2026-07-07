@@ -11,7 +11,7 @@ from app.bootstrap.container import container
 from app.services.hotel_sync_handler import _build_document
 
 # Database connection details from appsettings.json
-DB_CONNECTION_STRING = "Driver={ODBC Driver 17 for SQL Server};Server=PC-MINHNGUYENT;Database=BookingDb;UID=sa;PWD=Password@123;TrustServerCertificate=yes;"
+DB_CONNECTION_STRING = "Driver={ODBC Driver 17 for SQL Server};Server=host.docker.internal;Database=BookingDb;UID=sa;PWD=Password@123;TrustServerCertificate=yes;"
 
 def fetch_hotels_from_db():
     """Fetches all hotels and their room types from SQL Server."""

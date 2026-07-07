@@ -52,7 +52,7 @@ namespace Booking.Web.Services
                 return;
             }
 
-            var roomTypes = hotel.RoomTypes?.Select(rt => new
+            var roomTypes = hotel.RoomTypes?.Select(rt => (object)new
             {
                 name = rt.Name,
                 type = rt.Type,
