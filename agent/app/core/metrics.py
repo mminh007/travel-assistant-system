@@ -50,3 +50,25 @@ SEMANTIC_CACHE_LOOKUPS = Counter(
     'Total semantic cache evaluation lookups categorized by resolution status', 
     ['status'] # e.g., "hit", "miss", "error"
 )
+
+# ==========================================
+# 4. COST TRACKING & TOKEN USAGE
+# ==========================================
+TOKEN_USAGE_COUNTER = Counter(
+    "agent_token_usage_total",
+    "Total token usage by tier and type",
+    ["tier", "token_type"]  # tier=1|2, token_type=input|output
+)
+
+ESTIMATED_COST_GAUGE = Histogram(
+    "agent_estimated_cost_usd",
+    "Estimated USD cost per request",
+    buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
+)
+
+COST_PER_TIER_HISTOGRAM = Histogram(
+    "agent_cost_per_tier_usd",
+    "Cost breakdown by LLM tier per request",
+    ["tier"],
+    buckets=[0.001, 0.005, 0.01, 0.05, 0.1]
+)

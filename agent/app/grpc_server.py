@@ -238,7 +238,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                 data_to_sign = f"{request.session_id}:{timestamp}:{response_hash}"
                 
                 # Sign the data
-                signature = sign_data_es256(data_to_sign, settings.security.ai_receipt_private_key)
+                signature = sign_data_es256(data_to_sign, settings.security.ai_receipt_private_key.get_secret_value())
 
                 # Yield the final message containing the Receipt envelope
                 receipt_msg = chat_pb2.Receipt(

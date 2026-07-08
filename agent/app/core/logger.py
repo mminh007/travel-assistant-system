@@ -1,6 +1,8 @@
 # app/core/logger.py
 import logging
 import os
+import json
+from datetime import datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
 from app.core.settings import settings
 
@@ -182,3 +184,20 @@ def setup_app_logger(name: str) -> logging.Logger:
     logger.addHandler(file_handler)
     
     return logger
+
+class StructuredEventLogger:
+    """Logs important events in JSON format for easy aggregation and querying."""
+    
+    def __init__(self, logger_instance: logging.Logger):
+        self._logger = logger_instance
+        
+    def log_request_event(self, event_type: str, session_id: str, data: dict):
+        event = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": event_type,
+            "session_id": session_id,
+            **data
+        }
+        self._logger.info(json.dumps(event, ensure_ascii=False))
+
+structured_logger = StructuredEventLogger(setup_app_logger("StructuredEvents"))

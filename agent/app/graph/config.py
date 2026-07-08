@@ -1,5 +1,6 @@
 # app/graph/config.py
 import hashlib
+import dataclasses
 from functools import lru_cache
 from typing import Dict, Any, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -187,6 +188,12 @@ def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None) ->
 
 # ─── CONCURRENCY & RETRY WRAPPER ───
 
+@dataclasses.dataclass
+class TokenUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tier: int = 1
+
 @retry(
     retry=retry_if_exception_type((httpx.HTTPStatusError,)),
     wait=wait_exponential(multiplier=2, min=5, max=60),
@@ -196,10 +203,19 @@ def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None) ->
 async def invoke_llm_with_limit(tier: int, llm, messages: list, config: RunnableConfig = None):
     """
     Executes an LLM call subject to rate limits (retry on 429) and concurrency limits.
+    Returns a tuple of (response, TokenUsage).
     """
     sem = get_semaphore(tier)
     async with sem:
-        return await llm.ainvoke(messages, config)
+        response = await llm.ainvoke(messages, config)
+        
+        usage = getattr(response, "usage_metadata", {}) or {}
+        token_usage = TokenUsage(
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+            tier=tier
+        )
+        return response, token_usage
 
 
 # ─── BOUND LLM CACHING MECHANISM (O(1) OPTIMIZATION) ───

@@ -25,11 +25,26 @@ logger = setup_app_logger("CognitiveNodes")
 
 class InputGuardrailOutput(BaseModel):
     is_in_domain: bool = Field(description="True if the request is related to travel, flights, hotels, or travel FAQs. False otherwise.")
-    intent_category: Literal["hotel_booking", "flight_booking", "travel_faq", "itinerary_planning", "system_navigation_faq", "out_of_domain"] = Field(description="The category of the user's request.")
+    intent_category: Literal["hotel_booking", "travel_faq", "itinerary_planning", "system_navigation_faq", "out_of_domain", "ambiguous"] = Field(description="The category of the user's request.")
     complexity: str = Field(description="Level of complexity: 'low', 'medium', 'high'.")
     objective: str = Field(description="The overarching execution objective for the Planner.")
     detected_language: str = Field(description="The detected language of the user's prompt (e.g., 'English', 'Vietnamese', 'Spanish').")
     rationale: str = Field(description="Internal chain-of-thought justification.")
+    confidence: float = Field(default=1.0, description="Confidence score 0.0-1.0 for the intent classification.")
+    ambiguity_reason: Optional[str] = Field(default=None, description="If confidence < 0.7, explain what is ambiguous.")
+
+def update_token_usage(state: AgentState, usage) -> dict:
+    cost_in = usage.input_tokens * (0.15 if usage.tier == 1 else 5.0) / 1000000
+    cost_out = usage.output_tokens * (0.60 if usage.tier == 1 else 15.0) / 1000000
+    cost = cost_in + cost_out
+    tier_prefix = f"tier{usage.tier}"
+    in_key = f"{tier_prefix}_input_tokens"
+    out_key = f"{tier_prefix}_output_tokens"
+    return {
+        in_key: (state.get(in_key) or 0) + usage.input_tokens,
+        out_key: (state.get(out_key) or 0) + usage.output_tokens,
+        "estimated_cost_usd": (state.get("estimated_cost_usd") or 0.0) + cost
+    }
 
 class TaskItem(BaseModel):
     id: int = Field(description="Unique incremental ID for the task.")
@@ -140,7 +155,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
 
     try:
         structured_llm = get_structured_llm(1, InputGuardrailOutput, config)
-        decision: InputGuardrailOutput = await invoke_llm_with_limit(1, structured_llm, [
+        decision, usage = await invoke_llm_with_limit(1, structured_llm, [
             SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request, or a question about how to use the website (system_navigation_faq)?"),
             HumanMessage(content=user_latest_message)
         ], config)
@@ -154,7 +169,8 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
                 "intent_category": "out_of_domain",
                 "complexity": "low",
                 "objective": "Decline request politely",
-                "detected_language": decision.detected_language
+                "detected_language": decision.detected_language,
+                **update_token_usage(state, usage)
             }
 
         return {
@@ -162,7 +178,10 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
             "intent_category": decision.intent_category,
             "complexity": decision.complexity,
             "objective": decision.objective,
-            "detected_language": decision.detected_language
+            "detected_language": decision.detected_language,
+            "intent_confidence": decision.confidence,
+            "ambiguity_reason": decision.ambiguity_reason,
+            **update_token_usage(state, usage)
         }
     except Exception as route_err:
         logger.error(f"❌ [GUARDRAIL FAILURE] Defaulting to travel framework -> Trace: {str(route_err)}")
@@ -228,7 +247,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
 
     try:
         structured_planner_llm = get_structured_llm(2, PlannerOutput, config)
-        plan: PlannerOutput = await invoke_llm_with_limit(2, structured_planner_llm, [
+        plan, usage = await invoke_llm_with_limit(2, structured_planner_llm, [
             SystemMessage(
                 content=(
                     "You are the Travel Master Planner. Break down the user's travel request into 2-4 "
@@ -246,10 +265,12 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
             for t in plan.tasks
         ]
         logger.info(f"==> [Planner] Generated {len(tasks_state)} tasks successfully.")
+        token_update = update_token_usage(state, usage)
 
     except Exception as plan_err:
         logger.error(f"❌ [PLANNER FAILURE] Structured parse failed — falling back to single task. Trace: {str(plan_err)}")
         tasks_state = [{"id": 1, "desc": user_initial_prompt, "status": "pending", "result": None, "findings": []}]
+        token_update = {}
 
     return {
         "tasks": tasks_state,
@@ -257,7 +278,8 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
         "iteration_count": 0,
         "tool_call_count": 0,
         "action_history": [],
-        "rework_count": 0
+        "rework_count": 0,
+        **token_update
     }
 
 
@@ -280,8 +302,6 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     if intent_category == "hotel_booking":
         intent_instructions = "Focus heavily on providing accurate dates, pricing, and precise location details for hotels."
-    elif intent_category == "flight_booking":
-        intent_instructions = "Ensure strict verification of origin, destination, travel dates, and passenger counts for flights."
     elif intent_category == "itinerary_planning":
         intent_instructions = "Provide logical sequential progression in the plans. Include estimated travel times and distances."
     else:
@@ -322,10 +342,11 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     current_iteration = state.get("iteration_count", 0) + 1
 
-    response = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config)
+    response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config)
     return {
         "messages": [response],
-        "iteration_count": current_iteration
+        "iteration_count": current_iteration,
+        **update_token_usage(state, usage)
     }
 
 
@@ -369,20 +390,23 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
     try:
         # Tier 1 (fast/cheap model) is sufficient — extraction is a short, focused call
         structured_extractor = get_structured_llm(1, ExecutorOutput, config)
-        extraction: ExecutorOutput = await invoke_llm_with_limit(1, structured_extractor, [
+        extraction, usage = await invoke_llm_with_limit(1, structured_extractor, [
             HumanMessage(content=extraction_prompt)
         ], config)
         raw_summary = extraction.result_summary
         findings = [f.model_dump() for f in extraction.findings]
         logger.info(f"    Extracted {len(findings)} finding(s). Summary: '{raw_summary[:80]}...'")
+        token_update = update_token_usage(state, usage)
     except Exception as e:
         logger.error(f"❌ [EXTRACTOR FAILURE] Falling back to raw executor text. Trace: {str(e)}")
         raw_summary = executor_raw
         findings = []
+        token_update = {}
 
     return {
         "raw_executor_output": raw_summary,
-        "extracted_findings": findings
+        "extracted_findings": findings,
+        **token_update
     }
 
 
@@ -440,7 +464,8 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
 
     try:
         structured_evaluator_llm = get_structured_llm(2, EvaluatorOutput, config)
-        evaluation: EvaluatorOutput = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config)
+        evaluation, usage = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config)
+        token_update = update_token_usage(state, usage)
     except Exception as e:
         logger.error(f"❌ [EVALUATOR FAILURE] Parse error: {str(e)}")
         evaluation = EvaluatorOutput(
@@ -449,6 +474,7 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
             feedback="[Fallback] Parsing failed, proceeding automatically.",
             needs_rework=False, actionable_advice="[Fallback] Proceeding without rework."
         )
+        token_update = {}
 
     new_rework_count = current_rework_count + 1 if evaluation.needs_rework else current_rework_count
 
@@ -462,7 +488,8 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
         "evaluator_feedback": evaluation.feedback,
         "evaluator_notes": evaluation.actionable_advice,
         "needs_rework": evaluation.needs_rework,
-        "rework_count": new_rework_count
+        "rework_count": new_rework_count,
+        **token_update
     }
 
 
@@ -503,7 +530,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         f"<task_results>\n{results_text}\n</task_results>\n"
     )
 
-    final_response = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config)
+    final_response, usage = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config)
 
     # Clean any leading/trailing markdown code fences as a failsafe
     if final_response and hasattr(final_response, "content") and isinstance(final_response.content, str):
@@ -519,7 +546,10 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
 
     logger.info("    Process Complete. Handshake ready.\n\n")
 
-    return {"messages": [final_response]}
+    return {
+        "messages": [final_response],
+        **update_token_usage(state, usage)
+    }
 
 
 async def node_task_manager(state: AgentState):
@@ -584,3 +614,33 @@ async def node_task_manager(state: AgentState):
             "tasks": updated_tasks,
             "current_task_id": None
         }
+
+async def node_clarification_agent(state: AgentState, config: RunnableConfig = None):
+    """
+    Triggered when intent_confidence < INTENT_CONFIDENCE_THRESHOLD.
+    Generates a natural clarification question.
+    """
+    user_message = state["messages"][-1].content
+    ambiguity_reason = state.get("ambiguity_reason", "The request was unclear.")
+    detected_language = state.get("detected_language", "English")
+    
+    clarification_prompt = f"""
+    You are a friendly Travel Assistant. The user's request is ambiguous.
+    Ambiguity reason: {ambiguity_reason}
+    
+    Generate ONE natural clarification question in {detected_language}.
+    Offer 2-3 specific options to help user clarify.
+    Keep it short and friendly.
+    
+    User said: "{user_message}"
+    """
+    
+    llm = get_llm_instance(1, config)
+    response, usage = await invoke_llm_with_limit(1, llm, [HumanMessage(content=clarification_prompt)], config)
+    
+    logger.info(f"[Clarification] Low confidence intent — asking for clarification")
+    
+    return {
+        "messages": [response],
+        **update_token_usage(state, usage)
+    }

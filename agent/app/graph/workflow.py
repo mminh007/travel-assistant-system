@@ -16,6 +16,7 @@ from app.graph.nodes import (
     node_task_manager,
     node_finding_extractor,
     node_support_agent,
+    node_clarification_agent,
 )
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
@@ -45,14 +46,21 @@ workflow.add_node("task_manager", node_task_manager)
 workflow.add_node("finding_extractor", node_finding_extractor)
 workflow.add_node("final_synthesizer", node_final_synthesizer)
 workflow.add_node("support_agent", node_support_agent)
+workflow.add_node("clarification_agent", node_clarification_agent)
 
 workflow.set_entry_point("input_guardrail")
 
 # ─── PHASE 1: COMPLEXITY-AWARE ROUTING ───
+INTENT_CONFIDENCE_THRESHOLD = 0.70
+
 def route_from_guardrail(state: AgentState) -> str:
     """Routes out of domain, to support agent, or to planner/direct init."""
     if not state.get("is_in_domain", True):
         return "out_of_domain"
+    
+    confidence = state.get("intent_confidence", 1.0)
+    if confidence < INTENT_CONFIDENCE_THRESHOLD:
+        return "clarification_agent"
     
     intent = state.get("intent_category", "")
     if intent == "system_navigation_faq":
@@ -70,12 +78,14 @@ workflow.add_conditional_edges(
         "out_of_domain": "out_of_domain",
         "support_agent": "support_agent",
         "direct_executor_init": "direct_executor_init",
-        "planner": "planner"
+        "planner": "planner",
+        "clarification_agent": "clarification_agent"
     }
 )
 
 workflow.add_edge("out_of_domain", END)
 workflow.add_edge("support_agent", END)
+workflow.add_edge("clarification_agent", END)
 
 workflow.add_edge("planner", "travel_react_agent")
 workflow.add_edge("direct_executor_init", "travel_react_agent")
