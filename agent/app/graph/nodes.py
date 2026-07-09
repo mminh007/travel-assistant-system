@@ -32,6 +32,9 @@ from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_i
 logger = setup_app_logger("CognitiveNodes")
 
 FINDING_CONFIDENCE_THRESHOLD = 0.5
+COMPACT_AGENT_REMINDER = "REMINDER: Output ONLY the JSON/Markdown block. No pleasantries. Think step-by-step but keep thoughts under 2 sentences."
+_MAX_EVAL_PAYLOAD_CHARS = 4000
+_MAX_FC_OBSERVATION_CHARS = 4000
 
 
 # ─── STRUCTURED OUTPUT SCHEMAS ───
@@ -199,7 +202,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
         decision, usage = await invoke_llm_with_limit(1, structured_llm, [
             SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request, or a question about how to use the website (system_navigation_faq)?"),
             HumanMessage(content=user_latest_message)
-        ], config, node_name="input_guardrail")
+        ], config, max_tokens_override=settings.node_limits.input_guardrail, node_name="input_guardrail")
         logger.info(f"\n\n==> [PROCESS] INPUT_GUARDRAIL Initializing...")
         logger.info(f"    In Domain: [{decision.is_in_domain}] | Intent: {decision.intent_category.upper()} | Complexity: {decision.complexity.upper()}")
         logger.info(f"    Objective: {decision.objective}\n")
@@ -266,13 +269,18 @@ async def node_support_agent(state: AgentState, config: RunnableConfig = None):
     safe_tools = [t for t in mcp_tools if "search_tavily" not in t.name]
     bound_llm = llm.bind_tools(safe_tools)
 
-    response = await bound_llm.ainvoke([
-        SystemMessage(content=support_system_prompt),
-        HumanMessage(content=user_latest_message)
-    ], config)
+    response, usage = await invoke_llm_with_limit(
+        1, bound_llm, [
+            SystemMessage(content=support_system_prompt),
+            HumanMessage(content=user_latest_message)
+        ], config, max_tokens_override=settings.node_limits.support_agent, node_name="support_agent"
+    )
 
     # Convert ToolMessage handling or just return AIMessage if it directly responds
-    return {"messages": [response]}
+    return {
+        "messages": [response],
+        **update_token_usage(state, usage, node_name="support_agent")
+    }
 
 
 
@@ -299,7 +307,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
                 )
             ),
             HumanMessage(content=user_initial_prompt)
-        ], config, node_name="planner_agent")
+        ], config, max_tokens_override=settings.node_limits.planner_agent, node_name="planner_agent")
 
         tasks_state = [
             {"id": t.id, "desc": t.description, "status": "pending", "result": None, "findings": []}
@@ -383,7 +391,10 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     current_iteration = state.get("iteration_count", 0) + 1
 
-    response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config, node_name="travel_react_agent")
+    if current_iteration > 1:
+        compiled_messages.append(SystemMessage(content=COMPACT_AGENT_REMINDER))
+
+    response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config, max_tokens_override=settings.node_limits.travel_react_agent, node_name="travel_react_agent")
     return {
         "messages": [response],
         "iteration_count": current_iteration,
@@ -433,7 +444,7 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
         structured_extractor = get_structured_llm(1, ExecutorOutput, config)
         extraction, usage = await invoke_llm_with_limit(1, structured_extractor, [
             HumanMessage(content=extraction_prompt)
-        ], config, node_name="finding_extractor")
+        ], config, max_tokens_override=settings.node_limits.finding_extractor, node_name="finding_extractor")
         raw_summary = extraction.result_summary
         findings = [f.model_dump() for f in extraction.findings]
         logger.info(f"    Extracted {len(findings)} finding(s). Summary: '{raw_summary[:80]}...'")
@@ -471,11 +482,15 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
             "fact_check_result": {"is_consistent": True, "contradictions": [], "consistency_score": 1.0, "ungrounded_claims": []}
         }
         
+    raw_obs_str = json.dumps(tool_observations, ensure_ascii=False)
+    if len(raw_obs_str) > _MAX_FC_OBSERVATION_CHARS:
+        raw_obs_str = raw_obs_str[:_MAX_FC_OBSERVATION_CHARS] + " ...[TRUNCATED]"
+        
     check_prompt = f"""
     You are a Fact Verification engine.
     
     TOOL RESULTS (Ground Truth):
-    {json.dumps(tool_observations, ensure_ascii=False)}
+    {raw_obs_str}
     
     EXECUTOR CLAIMS (to verify):
     {json.dumps(extracted_findings, ensure_ascii=False)}
@@ -486,7 +501,7 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
     
     try:
         structured_checker = get_structured_llm(1, FactCheckResult, config)
-        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config, node_name="fact_checker")
+        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config, max_tokens_override=settings.node_limits.fact_checker, node_name="fact_checker")
         
         if not result.is_consistent:
             logger.warning(f"⚠️ [FACT CHECK] Contradictions detected: {result.contradictions}")
@@ -539,6 +554,9 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
 
     objective = state.get("objective", "Provide a comprehensive answer.")
     executor_payload = state.get("raw_executor_output") or state["messages"][-1].content
+    if isinstance(executor_payload, str) and len(executor_payload) > _MAX_EVAL_PAYLOAD_CHARS:
+        executor_payload = executor_payload[:_MAX_EVAL_PAYLOAD_CHARS] + " ...[TRUNCATED]"
+        
     findings = state.get("extracted_findings", [])
     action_history = state.get("action_history", [])
     current_rework_count = state.get("rework_count", 0)
@@ -559,7 +577,7 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
 
     try:
         structured_evaluator_llm = get_structured_llm(2, EvaluatorOutput, config)
-        evaluation, usage = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config, node_name="evaluator_agent")
+        evaluation, usage = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config, max_tokens_override=settings.node_limits.evaluator_agent, node_name="evaluator_agent")
         token_update = update_token_usage(state, usage, node_name="evaluator_agent")
     except Exception as e:
         logger.error(f"❌ [EVALUATOR FAILURE] Parse error: {str(e)}")
@@ -628,7 +646,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         f"<task_results>\n{results_text}\n</task_results>\n"
     )
 
-    final_response, usage = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config, node_name="final_synthesizer")
+    final_response, usage = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config, max_tokens_override=settings.node_limits.final_synthesizer, node_name="final_synthesizer")
 
     # Clean any leading/trailing markdown code fences as a failsafe
     if final_response and hasattr(final_response, "content") and isinstance(final_response.content, str):
@@ -734,7 +752,7 @@ async def node_clarification_agent(state: AgentState, config: RunnableConfig = N
     """
     
     llm = get_llm_instance(1, config)
-    response, usage = await invoke_llm_with_limit(1, llm, [HumanMessage(content=clarification_prompt)], config, node_name="clarification_agent")
+    response, usage = await invoke_llm_with_limit(1, llm, [HumanMessage(content=clarification_prompt)], config, max_tokens_override=settings.node_limits.clarification_agent, node_name="clarification_agent")
     
     logger.info(f"[Clarification] Low confidence intent — asking for clarification")
     

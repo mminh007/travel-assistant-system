@@ -102,6 +102,18 @@ class SecuritySettings(BaseSettings):
     # ECDSA SECP256R1 Public Key for B2B client verification
     ai_receipt_public_key: str
 
+class NodeTokenLimits(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="NODE_MAX_TOKENS_", extra="ignore")
+    input_guardrail: int = 150
+    support_agent: int = 500
+    planner_agent: int = 600
+    travel_react_agent: int = 800
+    finding_extractor: int = 400
+    fact_checker: int = 300
+    evaluator_agent: int = 400
+    final_synthesizer: int = 1000
+    clarification_agent: int = 200
+
 class Settings(BaseSettings):
     """Unified application configuration manager grouping domain-specific sub-models.
     
@@ -120,6 +132,7 @@ class Settings(BaseSettings):
     tavily: TavilySettings = Field(default_factory=TavilySettings)
     mcp: McpSettings = Field(default_factory=McpSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    node_limits: NodeTokenLimits = Field(default_factory=NodeTokenLimits)
     
 @lru_cache()
 def get_settings() -> Settings:
