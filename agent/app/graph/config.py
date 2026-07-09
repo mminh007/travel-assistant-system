@@ -13,6 +13,7 @@ from app.mcp.tool_registry import get_tools_by_domain
 from app.core.concurrency import get_semaphore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import httpx
+from app.core.metrics import NODE_TRUNCATION_TOTAL
 
 logger = setup_app_logger("GraphConfig")
 
@@ -215,15 +216,43 @@ class TokenUsage:
     stop=stop_after_attempt(4),
     reraise=True
 )
-async def invoke_llm_with_limit(tier: int, llm, messages: list, config: RunnableConfig = None):
+async def invoke_llm_with_limit(
+    tier: int,
+    llm,
+    messages: list,
+    config: RunnableConfig = None,
+    max_tokens_override: int = None,
+    node_name: str = "unknown",
+):
     """
     Executes an LLM call subject to rate limits (retry on 429) and concurrency limits.
     Returns a tuple of (response, TokenUsage).
     """
     sem = get_semaphore(tier)
     async with sem:
-        response = await llm.ainvoke(messages, config)
+        invoke_kwargs = {}
+        if max_tokens_override is not None:
+            invoke_kwargs["max_tokens"] = max_tokens_override
+
+        response = await llm.ainvoke(messages, config, **invoke_kwargs)
         
+        # ─── DETECT TRUNCATION (finish_reason = "length") ───
+        finish_reason = None
+        if hasattr(response, "response_metadata"):
+            finish_reason = (
+                response.response_metadata.get("finish_reason")
+                or response.response_metadata.get("stop_reason")  # Anthropic uses "stop_reason"
+            )
+
+        if finish_reason in ("length", "max_tokens"):
+            NODE_TRUNCATION_TOTAL.labels(node_name=node_name, tier=str(tier)).inc()
+            logger.warning(
+                f"⚠️ [TRUNCATION] node={node_name} | tier={tier} | "
+                f"finish_reason={finish_reason} | "
+                f"max_tokens_override={max_tokens_override} — "
+                f"Output truncated! Consider increasing max_tokens_override."
+            )
+
         usage = getattr(response, "usage_metadata", {}) or {}
         token_usage = TokenUsage(
             input_tokens=usage.get("input_tokens", 0),

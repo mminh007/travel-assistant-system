@@ -15,7 +15,17 @@ from app.services.query_transformer import transform_user_query
 from app.mcp.tool_registry import get_tools_by_domain
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
-from app.core.metrics import GRAPH_ITERATIONS
+from app.core.metrics import (
+    GRAPH_ITERATIONS,
+    NODE_INPUT_TOKENS,
+    NODE_OUTPUT_TOKENS,
+    NODE_TRUNCATION_TOTAL,
+    COMPLEXITY_DISTRIBUTION,
+    ITERATIONS_BY_COMPLEXITY,
+    TOOL_CALLS_BY_COMPLEXITY,
+    REWORK_CYCLES_BY_COMPLEXITY,
+    SOFT_STOP_TRIGGER_TOTAL,
+)
 from app.bootstrap.container import container
 from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_instance, invoke_llm_with_limit
 
@@ -36,10 +46,32 @@ class InputGuardrailOutput(BaseModel):
     confidence: float = Field(default=1.0, description="Confidence score 0.0-1.0 for the intent classification.")
     ambiguity_reason: Optional[str] = Field(default=None, description="If confidence < 0.7, explain what is ambiguous.")
 
-def update_token_usage(state: AgentState, usage) -> dict:
+def update_token_usage(state: AgentState, usage, node_name: str = "unknown") -> dict:
+    """
+    Updates token usage in state AND emits Prometheus metrics.
+    node_name: Node name for per-node analysis in Grafana.
+    """
     cost_in = usage.input_tokens * (0.15 if usage.tier == 1 else 5.0) / 1000000
     cost_out = usage.output_tokens * (0.60 if usage.tier == 1 else 15.0) / 1000000
     cost = cost_in + cost_out
+
+    tier_str = str(usage.tier)
+
+    # ─── PROMETHEUS METRICS ───
+    NODE_INPUT_TOKENS.labels(node_name=node_name, tier=tier_str).observe(usage.input_tokens)
+    NODE_OUTPUT_TOKENS.labels(node_name=node_name, tier=tier_str).observe(usage.output_tokens)
+
+    # ─── STRUCTURED LOG (TOKEN_AUDIT) ───
+    # Fixed format so the analyzer script can parse it
+    logger.info(
+        f"[TOKEN_AUDIT] "
+        f"node={node_name} | "
+        f"tier={usage.tier} | "
+        f"in={usage.input_tokens} | "
+        f"out={usage.output_tokens} | "
+        f"cost_usd={cost:.6f}"
+    )
+
     tier_prefix = f"tier{usage.tier}"
     in_key = f"{tier_prefix}_input_tokens"
     out_key = f"{tier_prefix}_output_tokens"
@@ -167,7 +199,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
         decision, usage = await invoke_llm_with_limit(1, structured_llm, [
             SystemMessage(content=f"{manifest}\n\nAnalyze the current human message. Is it a travel booking/faq request, or a question about how to use the website (system_navigation_faq)?"),
             HumanMessage(content=user_latest_message)
-        ], config)
+        ], config, node_name="input_guardrail")
         logger.info(f"\n\n==> [PROCESS] INPUT_GUARDRAIL Initializing...")
         logger.info(f"    In Domain: [{decision.is_in_domain}] | Intent: {decision.intent_category.upper()} | Complexity: {decision.complexity.upper()}")
         logger.info(f"    Objective: {decision.objective}\n")
@@ -179,7 +211,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
                 "complexity": "low",
                 "objective": "Decline request politely",
                 "detected_language": decision.detected_language,
-                **update_token_usage(state, usage)
+                **update_token_usage(state, usage, node_name="input_guardrail")
             }
 
         return {
@@ -190,7 +222,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
             "detected_language": decision.detected_language,
             "intent_confidence": decision.confidence,
             "ambiguity_reason": decision.ambiguity_reason,
-            **update_token_usage(state, usage)
+            **update_token_usage(state, usage, node_name="input_guardrail")
         }
     except Exception as route_err:
         logger.error(f"❌ [GUARDRAIL FAILURE] Defaulting to travel framework -> Trace: {str(route_err)}")
@@ -224,7 +256,7 @@ async def node_support_agent(state: AgentState, config: RunnableConfig = None):
         "4. Always keep your answers concise, polite, and accurate, matching the user's language."
     )
 
-    llm = get_llm_instance(config)
+    llm = get_llm_instance(1, config)
     
     # Optional: Bind ONLY the specific tool (like vector search) if we had the tool registry ready here. 
     # For now, we bind the mcp tools that allow Qdrant read (we assume travel_react_agent tools are shared or mcp tools include qdrant search).
@@ -267,14 +299,14 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
                 )
             ),
             HumanMessage(content=user_initial_prompt)
-        ], config)
+        ], config, node_name="planner_agent")
 
         tasks_state = [
             {"id": t.id, "desc": t.description, "status": "pending", "result": None, "findings": []}
             for t in plan.tasks
         ]
         logger.info(f"==> [Planner] Generated {len(tasks_state)} tasks successfully.")
-        token_update = update_token_usage(state, usage)
+        token_update = update_token_usage(state, usage, node_name="planner_agent")
 
     except Exception as plan_err:
         logger.error(f"❌ [PLANNER FAILURE] Structured parse failed — falling back to single task. Trace: {str(plan_err)}")
@@ -351,11 +383,11 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     current_iteration = state.get("iteration_count", 0) + 1
 
-    response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config)
+    response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config, node_name="travel_react_agent")
     return {
         "messages": [response],
         "iteration_count": current_iteration,
-        **update_token_usage(state, usage)
+        **update_token_usage(state, usage, node_name="travel_react_agent")
     }
 
 
@@ -401,11 +433,11 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
         structured_extractor = get_structured_llm(1, ExecutorOutput, config)
         extraction, usage = await invoke_llm_with_limit(1, structured_extractor, [
             HumanMessage(content=extraction_prompt)
-        ], config)
+        ], config, node_name="finding_extractor")
         raw_summary = extraction.result_summary
         findings = [f.model_dump() for f in extraction.findings]
         logger.info(f"    Extracted {len(findings)} finding(s). Summary: '{raw_summary[:80]}...'")
-        token_update = update_token_usage(state, usage)
+        token_update = update_token_usage(state, usage, node_name="finding_extractor")
     except Exception as e:
         logger.error(f"❌ [EXTRACTOR FAILURE] Falling back to raw executor text. Trace: {str(e)}")
         raw_summary = executor_raw
@@ -454,12 +486,12 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
     
     try:
         structured_checker = get_structured_llm(1, FactCheckResult, config)
-        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config)
+        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config, node_name="fact_checker")
         
         if not result.is_consistent:
             logger.warning(f"⚠️ [FACT CHECK] Contradictions detected: {result.contradictions}")
             
-        token_update = update_token_usage(state, usage)
+        token_update = update_token_usage(state, usage, node_name="fact_checker")
         
         feedback = f"[Fact Check] Consistency: {result.consistency_score:.2f}. {'; '.join(result.contradictions)}" if result.contradictions else ""
         
@@ -527,8 +559,8 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
 
     try:
         structured_evaluator_llm = get_structured_llm(2, EvaluatorOutput, config)
-        evaluation, usage = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config)
-        token_update = update_token_usage(state, usage)
+        evaluation, usage = await invoke_llm_with_limit(2, structured_evaluator_llm, [HumanMessage(content=evaluation_prompt)], config, node_name="evaluator_agent")
+        token_update = update_token_usage(state, usage, node_name="evaluator_agent")
     except Exception as e:
         logger.error(f"❌ [EVALUATOR FAILURE] Parse error: {str(e)}")
         evaluation = EvaluatorOutput(
@@ -596,7 +628,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         f"<task_results>\n{results_text}\n</task_results>\n"
     )
 
-    final_response, usage = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config)
+    final_response, usage = await invoke_llm_with_limit(2, get_llm_instance(2, config), [HumanMessage(content=synthesis_prompt)], config, node_name="final_synthesizer")
 
     # Clean any leading/trailing markdown code fences as a failsafe
     if final_response and hasattr(final_response, "content") and isinstance(final_response.content, str):
@@ -614,7 +646,7 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
 
     return {
         "messages": [final_response],
-        **update_token_usage(state, usage)
+        **update_token_usage(state, usage, node_name="final_synthesizer")
     }
 
 
@@ -702,11 +734,11 @@ async def node_clarification_agent(state: AgentState, config: RunnableConfig = N
     """
     
     llm = get_llm_instance(1, config)
-    response, usage = await invoke_llm_with_limit(1, llm, [HumanMessage(content=clarification_prompt)], config)
+    response, usage = await invoke_llm_with_limit(1, llm, [HumanMessage(content=clarification_prompt)], config, node_name="clarification_agent")
     
     logger.info(f"[Clarification] Low confidence intent — asking for clarification")
     
     return {
         "messages": [response],
-        **update_token_usage(state, usage)
+        **update_token_usage(state, usage, node_name="clarification_agent")
     }
