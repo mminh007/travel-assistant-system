@@ -4,6 +4,7 @@ import functools
 import tiktoken
 from typing import Dict, Any, List, Literal, Optional
 from pydantic import BaseModel, Field
+import json
 
 from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -19,6 +20,8 @@ from app.bootstrap.container import container
 from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_instance, invoke_llm_with_limit
 
 logger = setup_app_logger("CognitiveNodes")
+
+FINDING_CONFIDENCE_THRESHOLD = 0.5
 
 
 # ─── STRUCTURED OUTPUT SCHEMAS ───
@@ -76,6 +79,12 @@ class EvaluatorOutput(BaseModel):
     feedback: str = Field(description="Detailed feedback synthesizing the evaluations into a final verdict.")
     needs_rework: bool = Field(description="Determine if the executor needs to rerun based on the critic's severity.")
     actionable_advice: str = Field(description="Strict, actionable instructions for the executor or synthesis notes if passing.")
+
+class FactCheckResult(BaseModel):
+    is_consistent: bool = Field(description="True if the extracted findings are fully consistent with the raw tool observations. False if there are contradictions.")
+    consistency_score: float = Field(description="0.0 = completely contradictory, 1.0 = completely consistent")
+    contradictions: List[str] = Field(description="List of factual contradictions discovered, if any.")
+    ungrounded_claims: List[str] = Field(description="List of claims that are not grounded in the tool observations.")
 
 
 # ─── UTILITY FUNCTIONS ───
@@ -410,6 +419,60 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
     }
 
 
+async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
+    """
+    Node: FACT_CHECKER.
+    Compares extracted_findings with raw tool observations to detect hallucinations.
+    """
+    logger.info("==> [PROCESS] FACT_CHECKER Verifying factual consistency...")
+    
+    tool_observations = [
+        msg.content for msg in state["messages"]
+        if getattr(msg, "type", "") == "tool"
+    ]
+    
+    extracted_findings = state.get("extracted_findings", [])
+    
+    if not tool_observations:
+        logger.info("    No tool observations found. Skipping fact check.")
+        return {
+            "fact_check_result": {"is_consistent": True, "contradictions": [], "consistency_score": 1.0, "ungrounded_claims": []}
+        }
+        
+    check_prompt = f"""
+    You are a Fact Verification engine.
+    
+    TOOL RESULTS (Ground Truth):
+    {json.dumps(tool_observations, ensure_ascii=False)}
+    
+    EXECUTOR CLAIMS (to verify):
+    {json.dumps(extracted_findings, ensure_ascii=False)}
+    
+    Task: Find any contradictions between executor claims and tool results.
+    Focus on: prices, dates, names, quantities, availability status.
+    """
+    
+    try:
+        structured_checker = get_structured_llm(1, FactCheckResult, config)
+        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config)
+        
+        if not result.is_consistent:
+            logger.warning(f"⚠️ [FACT CHECK] Contradictions detected: {result.contradictions}")
+            
+        token_update = update_token_usage(state, usage)
+        
+        feedback = f"[Fact Check] Consistency: {result.consistency_score:.2f}. {'; '.join(result.contradictions)}" if result.contradictions else ""
+        
+        return {
+            "fact_check_result": result.model_dump(),
+            "evaluator_feedback": feedback,
+            **token_update
+        }
+    except Exception as e:
+        logger.error(f"❌ [FACT CHECK FAILURE] Skipping validation. Trace: {str(e)}")
+        return {}
+
+
 async def node_direct_executor_init(state: AgentState):
     """
     Node: DIRECT_EXECUTOR_INIT.
@@ -510,6 +573,9 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         if t.get("findings"):
             for f in t["findings"]:
                 stmt = f.get("statement", "") if isinstance(f, dict) else getattr(f, "statement", "")
+                confidence = f.get("confidence", 1.0) if isinstance(f, dict) else getattr(f, "confidence", 1.0)
+                if confidence < FINDING_CONFIDENCE_THRESHOLD:
+                    stmt = f"{stmt} (⚠️ Unverified / Low Confidence)"
                 all_findings.append(f"- {stmt}")
         if t.get("result"):
             all_results.append(f"### Task: {t['desc']}\n{t['result']}")

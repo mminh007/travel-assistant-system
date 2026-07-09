@@ -10,12 +10,17 @@ class OpenAISettings(BaseSettings):
     # ─── LLM TIER CONFIGURATION ───
     # Tier 1: High-speed, ultra-low cost. Used for routing, classification, and background data extraction.
     tier1_fast_model: str = "gpt-4o-mini" 
+    tier1_temperature: float = 0.0
     
     # Tier 2: Balanced cost/performance. Used for general software engineering and standard chat.
     tier2_balanced_model: str = "gpt-4o" 
+    tier2_temperature: float = 0.3
     
     # Tier 3: High-reasoning, expensive. Reserved strictly for complex academic analysis and vision matrix calculations.
     tier3_reasoning_model: str = "o1-mini" # Or claude-3.5-sonnet if supporting multiple providers
+    
+    # Node specific
+    fact_check_temperature: float = 0.0
     
     # ─── TOKEN GOVERNANCE ───
     max_completion_tokens: int = 1024  
@@ -33,12 +38,17 @@ class ClaudeSettings(BaseSettings):
     # ─── LLM TIER CONFIGURATION ───
     # Tier 1: Fast, low-cost model (Claude 3 Haiku)
     tier1_fast_model: str = "claude-3-haiku-20240307"
+    tier1_temperature: float = 0.0
     
     # Tier 2: Balanced reasoning (Claude 3.5 Sonnet)
     tier2_balanced_model: str = "claude-3-5-sonnet-20240620"
+    tier2_temperature: float = 0.3
     
     # Tier 3: Highest reasoning (Claude 3 Opus)
     tier3_reasoning_model: str = "claude-3-opus-20240229"
+    
+    # Node specific
+    fact_check_temperature: float = 0.0
     
     # ─── TOKEN GOVERNANCE ───
     max_completion_tokens: int = 1024

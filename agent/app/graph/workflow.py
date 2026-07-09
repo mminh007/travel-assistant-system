@@ -15,6 +15,7 @@ from app.graph.nodes import (
     node_final_synthesizer,
     node_task_manager,
     node_finding_extractor,
+    node_fact_checker,
     node_support_agent,
     node_clarification_agent,
 )
@@ -44,6 +45,7 @@ workflow.add_node("direct_executor_init", node_direct_executor_init)
 workflow.add_node("evaluator_agent", node_evaluator_agent)
 workflow.add_node("task_manager", node_task_manager)
 workflow.add_node("finding_extractor", node_finding_extractor)
+workflow.add_node("fact_checker", node_fact_checker)
 workflow.add_node("final_synthesizer", node_final_synthesizer)
 workflow.add_node("support_agent", node_support_agent)
 workflow.add_node("clarification_agent", node_clarification_agent)
@@ -176,8 +178,9 @@ workflow.add_conditional_edges("travel_react_agent", evaluate_tool_hooks, execut
 # Link tracker directly to the actual LangChain ToolNode
 workflow.add_edge("action_tracker", "tools")
 
-# finding_extractor always proceeds to evaluator_agent after extraction completes
-workflow.add_edge("finding_extractor", "evaluator_agent")
+# finding_extractor proceeds to fact_checker, then to evaluator_agent
+workflow.add_edge("finding_extractor", "fact_checker")
+workflow.add_edge("fact_checker", "evaluator_agent")
 
 def route_back_to_agent(state: AgentState) -> str:
     return "travel_react_agent"

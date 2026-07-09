@@ -62,7 +62,7 @@ def _get_provider_settings(provider: str):
     return settings.openai  # default
 
 
-def _build_llm_cache_key(provider: str, model_name: str, api_key_str: Optional[str]) -> str:
+def _build_llm_cache_key(provider: str, model_name: str, api_key_str: Optional[str], temperature: Optional[float] = None) -> str:
     """
     Builds a deterministic, collision-resistant cache key.
 
@@ -82,7 +82,8 @@ def _build_llm_cache_key(provider: str, model_name: str, api_key_str: Optional[s
     """
     api_hash = hashlib.sha256(api_key_str.encode("utf-8")).hexdigest()[:12] if api_key_str else "no_key"
     settings_fp = _get_settings_fingerprint()
-    return f"{provider}_{model_name}_{api_hash}_{settings_fp}"
+    temp_str = f"_{temperature}" if temperature is not None else ""
+    return f"{provider}_{model_name}_{api_hash}_{settings_fp}{temp_str}"
 
 
 def _resolve_provider_and_key(config: RunnableConfig = None):
@@ -107,7 +108,7 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
     return provider, provider_cfg, api_key_str
 
 
-def get_llm_instance(tier: int, config: RunnableConfig = None) -> BaseChatModel:
+def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: float = None) -> BaseChatModel:
     """
     Dynamically instantiates and caches the LLM for the given tier.
 
@@ -120,23 +121,30 @@ def get_llm_instance(tier: int, config: RunnableConfig = None) -> BaseChatModel:
     # Resolve model name from settings — not from user input (security)
     if tier == 1:
         model_name = provider_cfg.tier1_fast_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier1_temperature", 0.0)
     elif tier == 2:
         model_name = provider_cfg.tier2_balanced_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier2_temperature", 0.3)
     else:
         model_name = provider_cfg.tier3_reasoning_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier3_temperature", 0.5)
 
     max_tokens = provider_cfg.max_completion_tokens
     base_url = getattr(provider_cfg, "base_url", None)
 
-    cache_key = _build_llm_cache_key(provider, model_name, api_key_str)
+    cache_key = _build_llm_cache_key(provider, model_name, api_key_str, temperature)
 
     if cache_key not in _LLM_INSTANCE_CACHE:
-        logger.info(f"==> [LLM Factory] Instantiating {provider.upper()} model: {model_name} (Tier {tier})")
+        logger.info(f"==> [LLM Factory] Instantiating {provider.upper()} model: {model_name} (Tier {tier}, Temp {temperature})")
         if provider == "claude":
             _LLM_INSTANCE_CACHE[cache_key] = ChatAnthropic(
                 model=model_name,
                 api_key=api_key_str,
                 max_completion_tokens=max_tokens,
+                temperature=temperature,
                 streaming=True,
                 max_retries=5,
             )
@@ -146,6 +154,7 @@ def get_llm_instance(tier: int, config: RunnableConfig = None) -> BaseChatModel:
                 api_key=api_key_str,
                 base_url=base_url,
                 max_completion_tokens=max_tokens,
+                temperature=temperature,
                 streaming=True,
                 max_retries=5,
             )
@@ -153,7 +162,7 @@ def get_llm_instance(tier: int, config: RunnableConfig = None) -> BaseChatModel:
     return _LLM_INSTANCE_CACHE[cache_key]
 
 
-def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None) -> Any:
+def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None, temperature: float = None) -> Any:
     """
     Dynamically creates and caches structured output runnables.
 
@@ -169,18 +178,24 @@ def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None) ->
 
     if tier == 1:
         model_name = provider_cfg.tier1_fast_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier1_temperature", 0.0)
     elif tier == 2:
         model_name = provider_cfg.tier2_balanced_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier2_temperature", 0.3)
     else:
         model_name = provider_cfg.tier3_reasoning_model
+        if temperature is None:
+            temperature = getattr(provider_cfg, "tier3_temperature", 0.5)
 
     schema_name = getattr(schema, "__name__", str(schema))
-    base_key = _build_llm_cache_key(provider, model_name, api_key_str)
+    base_key = _build_llm_cache_key(provider, model_name, api_key_str, temperature)
     cache_key = f"{base_key}_{schema_name}"
 
     if cache_key not in _STRUCTURED_LLM_CACHE:
-        logger.info(f"==> [LLM Factory] Compiling structured output | Schema: {schema_name} | Model: {model_name}")
-        base_llm = get_llm_instance(tier, config)
+        logger.info(f"==> [LLM Factory] Compiling structured output | Schema: {schema_name} | Model: {model_name} | Temp: {temperature}")
+        base_llm = get_llm_instance(tier, config, temperature=temperature)
         _STRUCTURED_LLM_CACHE[cache_key] = base_llm.with_structured_output(schema)
 
     return _STRUCTURED_LLM_CACHE[cache_key]

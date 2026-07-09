@@ -89,25 +89,25 @@ class HtmlFormatter(logging.Formatter):
 </style>
 """
 
-    def format(self, record):
-        msg = super().format(record)
-        msg_str = str(msg)
+def format(self, record):
+    msg = super().format(record)
+    msg_str = str(msg)
+    
+    css_class = "default"
+    
+    if "summary" in msg_str.lower() or "tổng hợp" in msg_str.lower():
+        return f'<div class="summary-box"><div class="summary-title">{record.levelname} SUMMARY</div>{msg_str}</div>'
         
-        css_class = "default"
+    if "[PROCESS]" in msg_str or record.levelname == "PROCESS":
+        css_class = "processing"
+    elif "[ERROR]" in msg_str or record.levelname == "ERROR":
+        css_class = "error"
+    elif "[WARNING]" in msg_str or record.levelname == "WARNING":
+        css_class = "warning"
+    elif "[INFO]" in msg_str or record.levelname == "INFO":
+        css_class = "success"
         
-        if "summary" in msg_str.lower() or "tổng hợp" in msg_str.lower():
-            return f'<div class="summary-box"><div class="summary-title">{record.levelname} SUMMARY</div>{msg_str}</div>'
-            
-        if "[PROCESS]" in msg_str or record.levelname == "PROCESS":
-            css_class = "processing"
-        elif "[ERROR]" in msg_str or record.levelname == "ERROR":
-            css_class = "error"
-        elif "[WARNING]" in msg_str or record.levelname == "WARNING":
-            css_class = "warning"
-        elif "[INFO]" in msg_str or record.levelname == "INFO":
-            css_class = "success"
-            
-        return f'<div class="log-line {css_class}"><span class="timestamp">{self.formatTime(record, self.datefmt)}</span> <span class="level">[{record.levelname}]</span> {msg_str}</div>'
+    return f'<div class="log-line {css_class}"><span class="timestamp">{self.formatTime(record, self.datefmt)}</span> <span class="level">[{record.levelname}]</span> {msg_str}</div>'
 
 
 class DailyAndSizeRotatingFileHandler(TimedRotatingFileHandler):
