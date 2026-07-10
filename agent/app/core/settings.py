@@ -90,7 +90,7 @@ class LogsSettings(BaseSettings):
 # MCP configuration for securing tool execution
 class McpSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="MCP_", extra="ignore")
-    jwt_secret: str = "default_mcp_jwt_secret_key_change_me_in_prod"
+    jwt_secret: SecretStr | None = None
 
 # Security configuration for AI response signatures and handshake keys
 class SecuritySettings(BaseSettings):

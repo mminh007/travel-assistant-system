@@ -1,10 +1,11 @@
 # app/api/routes/config.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Literal
 from app.bootstrap.container import container
 import json
 from app.core.crypto_helper import encrypt_value
+from app.api.auth import get_authenticated_user_id
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
@@ -21,7 +22,12 @@ class ProviderConfigSubmit(BaseModel):
     default: Optional[Literal["openai", "gemini", "claude", "llama", "deepseek"]] = None
 
 @router.post("/provider")
-async def submit_provider_config(config: ProviderConfigSubmit):
+async def submit_provider_config(
+    config: ProviderConfigSubmit,
+    caller_user_id: str = Depends(get_authenticated_user_id)
+):
+    if caller_user_id != config.user_id:
+        raise HTTPException(status_code=403, detail="Forbidden: cannot modify another user's config")
     if not container.redis_client:
         raise HTTPException(status_code=500, detail="Redis client not initialized.")
     

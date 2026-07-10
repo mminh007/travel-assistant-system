@@ -22,6 +22,7 @@ from app.bootstrap.startup import startup, shutdown
 from app.bootstrap.container import container
 from app.core.asymmetric_helper import sign_data_es256
 from app.core.crypto_helper import encrypt_value, decrypt_value
+from app.services.chat_stream_service import ChatStreamService
 
 from prometheus_client import Gauge, Counter
 from prometheus_client import start_http_server
@@ -41,9 +42,23 @@ GRPC_ERRORS_TOTAL = Counter(
 class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
     def __init__(self):
         self.graph = agent_graph
+        self._bg_tasks = set()
 
     async def UpdateProviderConfig(self, request: chat_pb2.ProviderConfigRequest, context: grpc.aio.ServicerContext):
         logger.info(f"==> [gRPC] Received config update from User: {request.user_id}")
+        
+        metadata = dict(context.invocation_metadata())
+        verified_user_id = metadata.get("x-verified-user-id")
+        
+        if not verified_user_id:
+            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+            context.set_details("Missing authentication")
+            return chat_pb2.ProviderConfigResponse(success=False, message="Unauthenticated")
+            
+        if verified_user_id != request.user_id:
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details("Forbidden: cannot modify another user's config")
+            return chat_pb2.ProviderConfigResponse(success=False, message="Forbidden")
         
         if not container.redis_client:
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -98,25 +113,6 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         # 🚀 METRIC: Increment active stream gauge
         GRPC_ACTIVE_STREAMS.inc()
 
-        initial_state = {
-            "messages": [HumanMessage(content=request.prompt)],
-            "user_id": request.user_id,
-            "session_id": request.session_id,
-            "current_domain": "travel",  # Fallback seed; Supervisor will override
-            "cache_hit": False,
-            # ─── Supervisor routing metadata ───
-            "complexity": "medium",               # Default; Supervisor will override
-            "required_agents": [],
-            # ─── Loop safeguard counters ───
-            "iteration_count": 0,
-            "tool_call_count": 0,
-            "action_history": [],
-            "rework_count": 0,
-            # ─── Workflow memory ───
-            "tasks": [],
-            "current_task_id": None,
-        }
-
         # Extract dynamic configuration from gRPC headers/metadata
         metadata = {k.lower(): v for k, v in context.invocation_metadata()}
         llm_provider = metadata.get("x-llm-provider")
@@ -128,136 +124,40 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         tier3_model = metadata.get("x-tier3-model")
 
         # ─── FALLBACK TO DYNAMIC USER CONFIG FROM REDIS ───
-        use_default_key = False
-        if container.redis_client:
-            user_config_data = await container.redis_client.get(f"user_config:{request.user_id}")
-            if user_config_data:
-                try:
-                    user_config = json.loads(user_config_data)
-                    llm_provider = llm_provider or user_config.get("llm_provider")
-                    
-                    stored_api_key = user_config.get("api_key")
-                    if stored_api_key:
-                        decrypted_key = decrypt_value(stored_api_key)
-                        if decrypted_key is None:
-                            logger.warning(f"[SecurityConfig] Stored api_key could not be decrypted for user={request.user_id} - falling back to default")
-                        else:
-                            api_key = api_key or decrypted_key
-
-                    use_default_key = user_config.get("use_default_key", False)
-                except Exception as e:
-                    logger.error(f"Failed to parse user config from Redis: {e}")
-
-        trace_config = {
-            "metadata": {
-                "session_id": request.session_id, 
-                "user_id": request.user_id,
-                "source": "grpc"
-            },
-            "configurable": {
-                "thread_id": f"{request.user_id}_{request.session_id}",
-                "llm_provider": llm_provider,
-                "api_key": api_key if not use_default_key else None
-            }
-        }
-
-        final_state_messages = []
-        ai_full_response_text = ""
-        resolved_routing_domain = "travel"
-        
-        is_anonymous = request.user_id.startswith("anon_")
-
-        async def run_stream(agent_graph_instance):
-            nonlocal ai_full_response_text, final_state_messages, resolved_routing_domain
-            async for event in agent_graph_instance.astream_events(initial_state, version="v2", config=trace_config):
-                if context.cancelled():
-                    logger.info("==> [gRPC] Stream dropped by upstream proxy.")
-                    break
-
-                kind = event["event"]
-                
-                if kind == "on_chat_model_stream":
-                    current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node not in ["final_synthesizer", "out_of_domain"]:
-                        continue
-
-                    content = event["data"]["chunk"].content
-                    if content and isinstance(content, str):
-                        ai_full_response_text += content
-                        yield chat_pb2.ChatResponse(chunk=content)
-                        
-                elif kind == "on_chat_model_end":
-                    current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node in ["final_synthesizer", "out_of_domain"]:
-                        output = event.get("data", {}).get("output")
-                        if output and hasattr(output, "response_metadata"):
-                            finish_reason = output.response_metadata.get("finish_reason")
-                            if finish_reason in ("length", "max_tokens"):
-                                logger.warning(f"⚠️ [TOKEN LIMIT EXCEEDED] max_completion_tokens exceeded in {current_node}")
-                                
-                elif kind == "on_chain_end" and event["name"] == "agent_graph":
-                    output_payload = event["data"]["output"]
-                    final_state_messages = output_payload["messages"]
-                    # 🚀 Intercept the terminal state domain configuration generated dynamically by the Supervisor
-                    resolved_routing_domain = output_payload.get("current_domain", "travel")
-                    
-                    if not ai_full_response_text and final_state_messages:
-                        last_msg = final_state_messages[-1]
-                        if getattr(last_msg, "type", "") == "ai" and last_msg.content and isinstance(last_msg.content, str):
-                            ai_full_response_text += last_msg.content
-                            yield chat_pb2.ChatResponse(chunk=last_msg.content)
+        from app.services.user_config_service import load_user_llm_config
+        user_config = await load_user_llm_config(request.user_id, container.redis_client)
+        llm_provider = llm_provider or user_config.get("llm_provider")
+        api_key = api_key or user_config.get("api_key")
+        use_default_key = user_config.get("use_default_key", False)
 
         try:
-            if is_anonymous:
-                graph = self.graph.compile(name="agent_graph")
-                async for chunk_response in run_stream(graph):
-                    yield chunk_response
-            else:
-                async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph = self.graph.compile(checkpointer=saver,name="agent_graph")
-                    async for chunk_response in run_stream(graph):
-                        yield chunk_response
-
-            # ─── ASYNCHRONOUS BACKGROUND LONG-TERM FACT EXTRACTION ORCHESTRATION ───
-            if final_state_messages and not is_anonymous:
-                # 🚀 Pass the resolved dynamic routing tag down the message pipeline task definition
-                asyncio.create_task(
-                    publish_extraction_task(
-                        request.user_id, 
-                        request.session_id, 
-                        resolved_routing_domain
+            chat_service = ChatStreamService(bg_tasks=self._bg_tasks)
+            async for event_type, data in chat_service.stream(
+                user_id=request.user_id,
+                session_id=request.session_id,
+                prompt=request.prompt,
+                llm_provider=llm_provider,
+                api_key=api_key,
+                is_cancelled_callback=context.cancelled,
+                source="grpc"
+            ):
+                if event_type == "chunk":
+                    yield chat_pb2.ChatResponse(chunk=data)
+                elif event_type == "receipt":
+                    receipt_msg = chat_pb2.Receipt(
+                        session_id=data["session_id"],
+                        timestamp=data["timestamp"],
+                        response_hash=data["response_hash"],
+                        signature=data["signature"],
+                        key_id=data["key_id"]
                     )
-                )
-
-            # 🚀 Cache the completed response text if available
-            if ai_full_response_text:
-                try:
-                    await container.semantic_cache.set(request.prompt, ai_full_response_text)
-                except Exception as cache_err:
-                    logger.warning(f"==> [gRPC] Semantic cache write failed, skipping: {cache_err}")
-
-            # ─── SECURE CRYPTOGRAPHIC AI RESPONSE RECEIPT GENERATION (SOLUTION A) ───
-            if ai_full_response_text:
-                # Compute SHA-256 hash of the fully accumulated response text
-                response_hash = hashlib.sha256(ai_full_response_text.encode('utf-8')).hexdigest()
-                timestamp = int(time.time())
-
-                # Data pattern to sign: session_id + timestamp + response_hash
-                data_to_sign = f"{request.session_id}:{timestamp}:{response_hash}"
-                
-                # Sign the data
-                signature = sign_data_es256(data_to_sign, settings.security.ai_receipt_private_key.get_secret_value())
-
-                # Yield the final message containing the Receipt envelope
-                receipt_msg = chat_pb2.Receipt(
-                    session_id=request.session_id,
-                    timestamp=timestamp,
-                    response_hash=response_hash,
-                    signature=signature,
-                    key_id="secp256r1-default-key"
-                )
-                yield chat_pb2.ChatResponse(chunk="", receipt=receipt_msg)
-                logger.info(f"==> [gRPC Receipt] Successfully generated and yielded AI Response Receipt for Session: {request.session_id}")
+                    yield chat_pb2.ChatResponse(chunk="", receipt=receipt_msg)
+                    logger.info(f"==> [gRPC Receipt] Successfully generated and yielded AI Response Receipt for Session: {request.session_id}")
+                elif event_type == "error":
+                    # Surface errors as gRPC status internal
+                    logger.error(f"==> [gRPC] Error from ChatStreamService: {data}")
+                    context.set_code(grpc.StatusCode.INTERNAL)
+                    context.set_details(data)
 
         except Exception as e:
             GRPC_ERRORS_TOTAL.inc()
@@ -269,13 +169,15 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
             # METRIC: Decrement stream gauge upon termination
             GRPC_ACTIVE_STREAMS.dec()
 
+from app.grpc_layer.auth_interceptor import UserOwnershipInterceptor
+
 async def serve():
     await asyncio.to_thread(start_http_server, 8001)
     logger.info("📊 gRPC Prometheus metrics exporter server listening securely on port 8001\n")
 
     await startup()
     
-    server = aio.server()
+    server = aio.server(interceptors=[UserOwnershipInterceptor()])
     chat_pb2_grpc.add_AgentServiceServicer_to_server(AgentServiceServicer(), server)
     listen_addr = '[::]:50051'
     

@@ -7,7 +7,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 # 🚀 Security Handshake Validation Layer (Solution A: HS256 JWT validation)
 from app.core.jwt_helper import verify_jwt
 client_token = os.environ.get("MCP_CLIENT_TOKEN")
-jwt_secret = os.environ.get("MCP_JWT_SECRET") or "default_mcp_jwt_secret_key_change_me_in_prod"
+jwt_secret = os.environ.get("MCP_JWT_SECRET")
+
+if not jwt_secret:
+    print("🚨 [Security Alert] MCP_JWT_SECRET environment variable is not set.", file=sys.stderr)
+    sys.exit(1)
 
 if not client_token:
     print("🚨 [Security Alert] Access Denied: Missing client authentication token.", file=sys.stderr)

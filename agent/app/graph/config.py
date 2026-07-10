@@ -113,6 +113,15 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
     return provider, provider_cfg, api_key_str
 
 
+def _resolve_tier_model_and_temp(tier: int, provider_cfg, temperature: float | None) -> tuple[str, float]:
+    if tier == 1:
+        return provider_cfg.tier1_fast_model, temperature if temperature is not None else getattr(provider_cfg, "tier1_temperature", 0.0)
+    elif tier == 2:
+        return provider_cfg.tier2_balanced_model, temperature if temperature is not None else getattr(provider_cfg, "tier2_temperature", 0.3)
+    else:
+        return provider_cfg.tier3_reasoning_model, temperature if temperature is not None else getattr(provider_cfg, "tier3_temperature", 0.5)
+
+
 def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: float = None) -> BaseChatModel:
     """
     Dynamically instantiates and caches the LLM for the given tier.
@@ -124,18 +133,7 @@ def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: floa
     provider, provider_cfg, api_key_str = _resolve_provider_and_key(config)
 
     # Resolve model name from settings — not from user input (security)
-    if tier == 1:
-        model_name = provider_cfg.tier1_fast_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier1_temperature", 0.0)
-    elif tier == 2:
-        model_name = provider_cfg.tier2_balanced_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier2_temperature", 0.3)
-    else:
-        model_name = provider_cfg.tier3_reasoning_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier3_temperature", 0.5)
+    model_name, temperature = _resolve_tier_model_and_temp(tier, provider_cfg, temperature)
 
     max_tokens = provider_cfg.max_completion_tokens
     base_url = getattr(provider_cfg, "base_url", None)
@@ -181,18 +179,7 @@ def get_structured_llm(tier: int, schema: Any, config: RunnableConfig = None, te
     """
     provider, provider_cfg, api_key_str = _resolve_provider_and_key(config)
 
-    if tier == 1:
-        model_name = provider_cfg.tier1_fast_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier1_temperature", 0.0)
-    elif tier == 2:
-        model_name = provider_cfg.tier2_balanced_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier2_temperature", 0.3)
-    else:
-        model_name = provider_cfg.tier3_reasoning_model
-        if temperature is None:
-            temperature = getattr(provider_cfg, "tier3_temperature", 0.5)
+    model_name, temperature = _resolve_tier_model_and_temp(tier, provider_cfg, temperature)
 
     schema_name = getattr(schema, "__name__", str(schema))
     base_key = _build_llm_cache_key(provider, model_name, api_key_str, temperature)

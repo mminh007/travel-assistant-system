@@ -13,6 +13,7 @@ from app.core.settings import settings
 from langfuse.langchain import CallbackHandler
 from langchain_core.tracers import LangChainTracer
 from app.core.metrics import SSE_ACTIVE_STREAMS, SSE_DISCONNECT_TOTAL
+from app.services.chat_stream_service import ChatStreamService
 
 router = APIRouter(prefix="/chat", tags=["Agent Chat Ecosystem"])
 
@@ -33,144 +34,38 @@ async def chat_stream_endpoint(
     if cached_reply:
         async def cached_generator():
             yield f"data: {cached_reply}\n\n"
-        return StreamingResponse(cached_generator(), media_type="text-event-stream")
-    
-    initial_state = {
-        "messages": [HumanMessage(content=request.prompt)],
-        "user_id": request.user_id,
-        "session_id": request.session_id,
-        "current_domain": "general_memory",   # Fallback seed; Supervisor will override
-        # ─── Supervisor routing metadata ───
-        "complexity": "medium",                # Default; Supervisor will override
-        "required_agents": [],
-        # ─── Loop safeguard counters ───
-        "iteration_count": 0,
-        "tool_call_count": 0,
-        "action_history": [],
-        "rework_count": 0,
-        # ─── Workflow memory ───
-        "tasks": [],
-        "current_task_id": None,
-    }
+        return StreamingResponse(cached_generator(), media_type="text/event-stream")
     
     # 🚀 OPTIMIZATION 1: Pass session_id and user_id directly to Langfuse
-    langfuse_handler = CallbackHandler(
-        session_id=request.session_id,
-        user_id=request.user_id,
-        tags=["prod-stream"]
-    )
-    
-    langsmith_tracer = LangChainTracer(project_name="agent-ecosystem-prod")
+    # Moved to ChatStreamService
 
     # ─── LOAD USER PROVIDER CONFIG FROM REDIS ───
-    user_config = {}
-    api_key_override = None
-    
-    if container.redis_client:
-        user_config_data = await container.redis_client.get(f"user_config:{request.user_id}")
-        if user_config_data:
-            try:
-                import json
-                from app.core.crypto_helper import decrypt_value
-                user_config = json.loads(user_config_data)
-                
-                stored_api_key = user_config.get("api_key")
-                if stored_api_key:
-                    decrypted_key = decrypt_value(stored_api_key)
-                    if decrypted_key is None:
-                        logger.warning(f"[SecurityConfig] Stored api_key could not be decrypted for user={request.user_id} - falling back to default")
-                    else:
-                        api_key_override = decrypted_key
-            except Exception as e:
-                logger.error(f"Failed to parse user config from Redis: {e}")
-
-    # 🚀 OPTIMIZATION & FINOPS TRACKING:
-    # Inject business classification metadata directly into the root trace span.
-    trace_config = {
-        "callbacks": [langfuse_handler, langsmith_tracer],
-        "metadata": {
-            "session_id": request.session_id, 
-            "user_id": request.user_id,
-            "business_process_codename": "Realtime_Chat_Resolution",
-            "client_tier": "Standard" 
-        },
-        "configurable": {
-            "thread_id": f"{request.user_id}_{request.session_id}",
-            # Only provider + api_key. Model tiers resolved from settings.py.
-            "llm_provider": user_config.get("llm_provider"),
-            "api_key": api_key_override if not user_config.get("use_default_key") else None
-        }
-    }
+    from app.services.user_config_service import load_user_llm_config
+    user_config = await load_user_llm_config(request.user_id, container.redis_client)
+    api_key_override = user_config.get("api_key")
 
     SSE_ACTIVE_STREAMS.inc()
 
-    is_anonymous = request.user_id.startswith("anon_")
-
     async def event_generator():
-        final_state_messages = []
-        ai_full_response_text = ""
-        resolved_domain = "general_memory"
         stream_completed_cleanly = False
+        chat_service = ChatStreamService(bg_tasks=set())
         
-        async def run_graph_stream(graph_instance):
-            nonlocal ai_full_response_text, final_state_messages, resolved_domain
-            async for event in graph_instance.astream_events(initial_state, version="v2", config=trace_config):
-                kind = event["event"]
-                
-                if kind == "on_chat_model_stream":
-                    current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node not in ["final_synthesizer", "out_of_domain"]:
-                        continue
-                    
-                    content = event["data"]["chunk"].content
-                    if content and isinstance(content, str):
-                        ai_full_response_text += content
-                        yield f"data: {content}\n\n"
-                        
-                elif kind == "on_chain_end" and event["name"] == "agent_graph":
-                    output_payload = event["data"]["output"]
-                    final_state_messages = output_payload["messages"]
-                    resolved_domain = output_payload.get("current_domain", "general_memory")
-                    
-                    if not ai_full_response_text and final_state_messages:
-                        last_msg = final_state_messages[-1]
-                        if getattr(last_msg, "type", "") == "ai" and last_msg.content and isinstance(last_msg.content, str):
-                            ai_full_response_text += last_msg.content
-                            yield f"data: {last_msg.content}\n\n"
-
         try:
-            if is_anonymous:
-                graph_run = agent_graph.compile(name="agent_graph")
-                async for chunk in run_graph_stream(graph_run):
-                    yield chunk
-            else:
-                async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph_run = agent_graph.compile(checkpointer=saver,name="agent_graph")
-                    async for chunk in run_graph_stream(graph_run):
-                        yield chunk
-            
-            # ─── SECURE CRYPTOGRAPHIC AI RESPONSE RECEIPT GENERATION ───
-            if ai_full_response_text:
-                import hashlib
-                import time
-                import json
-                from app.core.asymmetric_helper import sign_data_es256
-
-                response_hash = hashlib.sha256(ai_full_response_text.encode('utf-8')).hexdigest()
-                timestamp = int(time.time())
-                data_to_sign = f"{request.session_id}:{timestamp}:{response_hash}"
-                
-                signature = sign_data_es256(data_to_sign, settings.security.ai_receipt_private_key)
-                
-                receipt_json = {
-                    "type": "receipt",
-                    "session_id": request.session_id,
-                    "timestamp": timestamp,
-                    "response_hash": response_hash,
-                    "signature": signature,
-                    "key_id": "secp256r1-default-key"
-                }
-                yield f"data: {json.dumps(receipt_json)}\n\n"
+            async for event_type, data in chat_service.stream(
+                user_id=request.user_id,
+                session_id=request.session_id,
+                prompt=request.prompt,
+                llm_provider=user_config.get("llm_provider"),
+                api_key=api_key_override if not user_config.get("use_default_key") else None,
+                source="http"
+            ):
+                if event_type == "chunk":
+                    yield f"data: {data}\n\n"
+                elif event_type == "receipt":
+                    import json
+                    yield f"data: {json.dumps(data)}\n\n"
+                elif event_type == "error":
+                    yield f"data: [ERROR] {data}\n\n"
 
             stream_completed_cleanly = True    
         finally:
@@ -181,21 +76,4 @@ async def chat_stream_endpoint(
             else:
                 SSE_DISCONNECT_TOTAL.labels(reason="abrupt_client_disconnect").inc()
 
-            # 🚀 OPTIMIZATION 2: Ensure all Langfuse traces are flushed to the server,
-            # even upon successful stream completion or abrupt client disconnection.
-            langfuse_handler.flush()
-
-        # Cache the completed response text if available
-        if ai_full_response_text:
-            await container.semantic_cache.set(request.prompt, ai_full_response_text)
-
-        # Offload post-processing/extraction tasks asynchronously via RabbitMQ
-        if final_state_messages and not is_anonymous:
-            background_tasks.add_task(
-                publish_extraction_task,
-                request.user_id, 
-                request.session_id, 
-                resolved_domain
-            )
-
-    return StreamingResponse(event_generator(), media_type="text-event-stream")
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
