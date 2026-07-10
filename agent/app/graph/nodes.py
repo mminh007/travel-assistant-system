@@ -134,7 +134,8 @@ def prune_messages_by_token_limit(messages: list, max_tokens: int, model_name: s
     total_tokens = 0
     keep_messages = []
     for msg in reversed(messages):
-        msg_tokens = len(encoding.encode(msg.content))
+        content = msg.content if isinstance(msg.content, str) else ""
+        msg_tokens = len(encoding.encode(content))
         if total_tokens + msg_tokens > max_tokens:
             break
         keep_messages.insert(0, msg)
@@ -339,9 +340,6 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     """
     user_id = state.get("user_id", "UNKNOWN_USER")
     intent_category = state.get("intent_category", "travel_faq")
-
-    if not container.hybrid_search:
-        await container.initialize()
 
     user_initial_prompt = state["messages"][0].content if state["messages"] else ""
     manifest = load_agent_manifest_instructions()

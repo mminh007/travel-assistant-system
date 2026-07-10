@@ -34,8 +34,8 @@ def _build_document(data: dict) -> str:
     )
 
 async def process_hotel_sync_message(message: aio_pika.IncomingMessage):
-    async with message.process():
-        try:
+    try:
+        async with message.process():
             payload = json.loads(message.body.decode())
             action = payload.get("action_type")    # Create | Update | Delete
             hotel_id = payload.get("hotel_id")
@@ -77,6 +77,5 @@ async def process_hotel_sync_message(message: aio_pika.IncomingMessage):
                 await container.hotel_store.upsert_hotel(hotel_id, document, dense_embedding, metadata)
                 logger.info(f"==> [HotelSync] Upserted hotel '{data.get('name')}' into Qdrant.")
 
-        except Exception as e:
-            logger.error(f"❌ [HotelSync] Failed to process message: {e}")
-            await message.reject(requeue=False)
+    except Exception as e:
+        logger.error(f"❌ [HotelSync] Failed to process message: {e}")

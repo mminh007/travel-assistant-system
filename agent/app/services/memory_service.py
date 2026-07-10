@@ -1,5 +1,6 @@
 # app/service/memory_service.py
 import time
+import uuid
 from app.interfaces import MemoryStore
 from app.core.logger import setup_app_logger
 
@@ -29,7 +30,7 @@ class MemoryService:
             return
 
         # Generate a unique ID for the fact 
-        fact_id = f"fact_{int(time.time() * 1000)}"
+        fact_id = f"fact_{uuid.uuid4()}"
         
         # Flatten the anchors array into a string to support the Sparse Lexical BM25 parser later 
         anchors_str = " ".join(semantic_anchors)

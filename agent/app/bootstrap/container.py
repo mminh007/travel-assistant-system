@@ -9,6 +9,7 @@ from langchain_anthropic import ChatAnthropic
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
 import redis.asyncio as redis_async
+import asyncio
 
 logger = setup_app_logger("Container")
 
@@ -88,57 +89,60 @@ class Container:
         self.hybrid_search = None
         self.redis_client = None
         self._initialized = False
+        self._init_lock = asyncio.Lock()
 
     async def initialize(self):
-        if self._initialized:
-            return
-        self._initialized = True
-        
-        self.redis_client = redis_async.from_url(settings.redis.url)
+        async with self._init_lock:
+            if self._initialized:
+                return
+            
+            self.redis_client = redis_async.from_url(settings.redis.url)
 
-        # Dynamically resolve embedding + memory LLM from .env default
-        default_provider = _resolve_default_provider()
-        logger.info(f"==> [Container] Resolved system default provider: {default_provider}")
+            # Dynamically resolve embedding + memory LLM from .env default
+            default_provider = _resolve_default_provider()
+            logger.info(f"==> [Container] Resolved system default provider: {default_provider}")
 
-        embedding_model = _resolve_default_embedding(default_provider)
-        memory_llm = _resolve_default_memory_llm(default_provider)
+            embedding_model = _resolve_default_embedding(default_provider)
+            memory_llm = _resolve_default_memory_llm(default_provider)
 
-        self.embedding_provider = EmbeddingProvider(embedding_model)
+            self.embedding_provider = EmbeddingProvider(embedding_model)
 
-        self.vector_store = QdrantVectorStore()
+            self.vector_store = QdrantVectorStore()
 
-        self.memory_store = QdrantMemoryStore(
-            vector_store=self.vector_store,
-            embedding_provider=self.embedding_provider
-        )
+            self.memory_store = QdrantMemoryStore(
+                vector_store=self.vector_store,
+                embedding_provider=self.embedding_provider
+            )
 
-        # ─── Derive LLM model version for semantic cache versioning ───
-        # Changing the LLM in .env automatically invalidates stale cache entries.
-        cache_model_version = _resolve_cache_model_version(default_provider)
-        logger.info(f"==> [Container] Semantic cache version anchor: '{cache_model_version}'")
+            # ─── Derive LLM model version for semantic cache versioning ───
+            # Changing the LLM in .env automatically invalidates stale cache entries.
+            cache_model_version = _resolve_cache_model_version(default_provider)
+            logger.info(f"==> [Container] Semantic cache version anchor: '{cache_model_version}'")
 
-        self.semantic_cache = QdrantSemanticCache(
-            self.vector_store,
-            self.embedding_provider,
-            model_version=cache_model_version
-        )
+            self.semantic_cache = QdrantSemanticCache(
+                self.vector_store,
+                self.embedding_provider,
+                model_version=cache_model_version
+            )
 
-        self.memory_service = MemoryService(self.memory_store)
+            self.memory_service = MemoryService(self.memory_store)
 
-        self.extractor = FactExtractor(memory_llm)
+            self.extractor = FactExtractor(memory_llm)
 
-        self.memory_worker = MemoryWorker(
-            memory_service=self.memory_service,
-            extractor=self.extractor
-        )
+            self.memory_worker = MemoryWorker(
+                memory_service=self.memory_service,
+                extractor=self.extractor
+            )
 
-        self.hybrid_search = HybridRetriever(
-            embedding_provider=self.embedding_provider,
-            vector_store=self.vector_store
-        )
+            self.hybrid_search = HybridRetriever(
+                embedding_provider=self.embedding_provider,
+                vector_store=self.vector_store
+            )
 
-        self.hotel_store = QdrantHotelStore()
-        logger.info("==> [Container] QdrantHotelStore initialized.")
+            self.hotel_store = QdrantHotelStore()
+            logger.info("==> [Container] QdrantHotelStore initialized.")
+            
+            self._initialized = True
 
     async def shutdown(self):
         if self.redis_client:
