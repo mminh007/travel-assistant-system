@@ -64,12 +64,23 @@ async def chat_stream_endpoint(
 
     # ─── LOAD USER PROVIDER CONFIG FROM REDIS ───
     user_config = {}
+    api_key_override = None
+    
     if container.redis_client:
         user_config_data = await container.redis_client.get(f"user_config:{request.user_id}")
         if user_config_data:
             try:
                 import json
+                from app.core.crypto_helper import decrypt_value
                 user_config = json.loads(user_config_data)
+                
+                stored_api_key = user_config.get("api_key")
+                if stored_api_key:
+                    decrypted_key = decrypt_value(stored_api_key)
+                    if decrypted_key is None:
+                        logger.warning(f"[SecurityConfig] Stored api_key could not be decrypted for user={request.user_id} - falling back to default")
+                    else:
+                        api_key_override = decrypted_key
             except Exception as e:
                 logger.error(f"Failed to parse user config from Redis: {e}")
 
@@ -87,7 +98,7 @@ async def chat_stream_endpoint(
             "thread_id": f"{request.user_id}_{request.session_id}",
             # Only provider + api_key. Model tiers resolved from settings.py.
             "llm_provider": user_config.get("llm_provider"),
-            "api_key": user_config.get("api_key") if not user_config.get("use_default_key") else None
+            "api_key": api_key_override if not user_config.get("use_default_key") else None
         }
     }
 

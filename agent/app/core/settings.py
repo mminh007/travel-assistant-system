@@ -101,6 +101,10 @@ class SecuritySettings(BaseSettings):
     
     # ECDSA SECP256R1 Public Key for B2B client verification
     ai_receipt_public_key: str
+    
+    # AES-256-GCM symmetric keys for encrypting user configs in Redis
+    redis_encryption_key: SecretStr | None = None
+    redis_encryption_old_key: SecretStr | None = None
 
 class NodeTokenLimits(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="NODE_MAX_TOKENS_", extra="ignore")
@@ -113,6 +117,13 @@ class NodeTokenLimits(BaseSettings):
     evaluator_agent: int = 400
     final_synthesizer: int = 1000
     clarification_agent: int = 200
+
+class GrpcSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="GRPC_", extra="ignore")
+    tls_enabled: bool = False
+    tls_cert_path: str = ""
+    tls_key_path: str = ""
+    tls_ca_cert_path: str = ""
 
 class Settings(BaseSettings):
     """Unified application configuration manager grouping domain-specific sub-models.
@@ -133,6 +144,7 @@ class Settings(BaseSettings):
     mcp: McpSettings = Field(default_factory=McpSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     node_limits: NodeTokenLimits = Field(default_factory=NodeTokenLimits)
+    grpc: GrpcSettings = Field(default_factory=GrpcSettings)
     
 @lru_cache()
 def get_settings() -> Settings:

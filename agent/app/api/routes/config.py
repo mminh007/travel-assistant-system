@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 from app.bootstrap.container import container
 import json
+from app.core.crypto_helper import encrypt_value
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
@@ -41,7 +42,7 @@ async def submit_provider_config(config: ProviderConfigSubmit):
     elif config.llm_provider:
         # User provides their own key
         config_dict["llm_provider"] = config.llm_provider
-        config_dict["api_key"] = config.api_key
+        config_dict["api_key"] = encrypt_value(config.api_key) if config.api_key else None
         config_dict["use_default_key"] = False
     
     # TTL: 24 hours (86400 seconds)

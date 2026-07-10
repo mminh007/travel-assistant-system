@@ -21,6 +21,7 @@ from app.mcp.mcp_client import mcp_manager
 from app.bootstrap.startup import startup, shutdown
 from app.bootstrap.container import container
 from app.core.asymmetric_helper import sign_data_es256
+from app.core.crypto_helper import encrypt_value, decrypt_value
 
 from prometheus_client import Gauge, Counter
 from prometheus_client import start_http_server
@@ -61,7 +62,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                 context.set_details("Custom provider requires an api_key.")
                 return chat_pb2.ProviderConfigResponse(success=False, message="Custom provider requires an api_key.")
             config_dict["llm_provider"] = request.llm_provider
-            config_dict["api_key"] = request.api_key
+            config_dict["api_key"] = encrypt_value(request.api_key) if request.api_key else None
             config_dict["use_default_key"] = False
         
         await container.redis_client.setex(
@@ -119,7 +120,8 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         # Extract dynamic configuration from gRPC headers/metadata
         metadata = {k.lower(): v for k, v in context.invocation_metadata()}
         llm_provider = metadata.get("x-llm-provider")
-        api_key = metadata.get("x-api-key")
+        # Header renamed from x-api-key to x-llm-token to avoid proxy logging capture
+        api_key = metadata.get("x-llm-token")
         base_url = metadata.get("x-base-url")
         tier1_model = metadata.get("x-tier1-model")
         tier2_model = metadata.get("x-tier2-model")
@@ -133,7 +135,15 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                 try:
                     user_config = json.loads(user_config_data)
                     llm_provider = llm_provider or user_config.get("llm_provider")
-                    api_key = api_key or user_config.get("api_key")
+                    
+                    stored_api_key = user_config.get("api_key")
+                    if stored_api_key:
+                        decrypted_key = decrypt_value(stored_api_key)
+                        if decrypted_key is None:
+                            logger.warning(f"[SecurityConfig] Stored api_key could not be decrypted for user={request.user_id} - falling back to default")
+                        else:
+                            api_key = api_key or decrypted_key
+
                     use_default_key = user_config.get("use_default_key", False)
                 except Exception as e:
                     logger.error(f"Failed to parse user config from Redis: {e}")
@@ -268,8 +278,37 @@ async def serve():
     server = aio.server()
     chat_pb2_grpc.add_AgentServiceServicer_to_server(AgentServiceServicer(), server)
     listen_addr = '[::]:50051'
-    server.add_insecure_port(listen_addr)
-    logger.info(f"🚀 gRPC Core Engine started on {listen_addr}")
+    
+    if settings.grpc.tls_enabled:
+        if not os.path.exists(settings.grpc.tls_cert_path) or not os.path.exists(settings.grpc.tls_key_path):
+            raise FileNotFoundError(f"TLS enabled but certificate or key file not found at '{settings.grpc.tls_cert_path}' or '{settings.grpc.tls_key_path}'")
+        
+        with open(settings.grpc.tls_key_path, 'rb') as f:
+            private_key = f.read()
+        with open(settings.grpc.tls_cert_path, 'rb') as f:
+            certificate_chain = f.read()
+            
+        if settings.grpc.tls_ca_cert_path:
+            if not os.path.exists(settings.grpc.tls_ca_cert_path):
+                raise FileNotFoundError(f"TLS CA certificate file not found at '{settings.grpc.tls_ca_cert_path}'")
+            with open(settings.grpc.tls_ca_cert_path, 'rb') as f:
+                root_certificates = f.read()
+            server_credentials = grpc.ssl_server_credentials(
+                ((private_key, certificate_chain),),
+                root_certificates=root_certificates,
+                require_client_auth=True
+            )
+        else:
+            server_credentials = grpc.ssl_server_credentials(
+                ((private_key, certificate_chain),)
+            )
+
+        server.add_secure_port(listen_addr, server_credentials)
+        logger.info(f"🚀 gRPC Core Engine started SECURELY (TLS) on {listen_addr}")
+    else:
+        logger.warning("🚨 [SECURITY WARNING] gRPC running INSECURE — do NOT deploy to production")
+        server.add_insecure_port(listen_addr)
+        logger.info(f"🚀 gRPC Core Engine started on {listen_addr}")
     
     logger.info("⚙️ Connecting to external Upstream MCP Servers from gRPC Process...")
     await mcp_manager.initialize_all_servers()
