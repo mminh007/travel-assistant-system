@@ -1,7 +1,7 @@
 # app/api/deps.py
 from collections.abc import AsyncGenerator
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-from app.graph.workflow import compiled_graph
+from app.graph.workflow import agent_graph
 from app.core.settings import settings
 #from app.graph.vision_workflow import vision_graph
 
@@ -11,7 +11,7 @@ async def get_agent_graph()-> AsyncGenerator:
     This lifecycle isolate allows easy mock injections during automated unit tests.
     """
     async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-        runtime_graph = compiled_graph.compile(checkpointer=saver,name="compiled_graph")
+        runtime_graph = agent_graph.compile(checkpointer=saver,name="agent_graph")
         yield runtime_graph
 
 

@@ -262,13 +262,7 @@ async def node_support_agent(state: AgentState, config: RunnableConfig = None):
 
     llm = get_llm_instance(1, config)
     
-    # Optional: Bind ONLY the specific tool (like vector search) if we had the tool registry ready here. 
-    # For now, we bind the mcp tools that allow Qdrant read (we assume travel_react_agent tools are shared or mcp tools include qdrant search).
-    from app.mcp.mcp_client import get_mcp_tools
-    mcp_tools = get_mcp_tools()
-    # In a real isolation, we would filter mcp_tools to ONLY include qdrant_search, excluding tavily_search.
-    safe_tools = [t for t in mcp_tools if "search_tavily" not in t.name]
-    bound_llm = llm.bind_tools(safe_tools)
+    bound_llm = get_cached_bound_llm("support", llm)
 
     response, usage = await invoke_llm_with_limit(
         1, bound_llm, [
@@ -344,8 +338,6 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     user_initial_prompt = state["messages"][0].content if state["messages"] else ""
     manifest = load_agent_manifest_instructions()
     task_context = _build_task_context(state)
-
-    intent_category = state.get("intent_category", "travel_faq")
 
     if intent_category == "hotel_booking":
         intent_instructions = "Focus heavily on providing accurate dates, pricing, and precise location details for hotels."

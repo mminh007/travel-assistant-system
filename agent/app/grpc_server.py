@@ -4,6 +4,9 @@ import grpc
 from grpc import aio
 import sys
 import os
+import json
+import hashlib
+import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "grpc_layer"))
 import chat_pb2
@@ -11,12 +14,13 @@ import chat_pb2_grpc
 from langchain_core.messages import HumanMessage
 from app.services.rabbitmq_publisher import publish_extraction_task
 from app.core.logger import setup_app_logger
-from app.graph.workflow import compiled_graph
+from app.graph.workflow import agent_graph
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from app.core.settings import settings
 from app.mcp.mcp_client import mcp_manager
 from app.bootstrap.startup import startup, shutdown
 from app.bootstrap.container import container
+from app.core.asymmetric_helper import sign_data_es256
 
 from prometheus_client import Gauge, Counter
 from prometheus_client import start_http_server
@@ -35,7 +39,7 @@ GRPC_ERRORS_TOTAL = Counter(
 
 class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
     def __init__(self):
-        self.graph = compiled_graph
+        self.graph = agent_graph
 
     async def UpdateProviderConfig(self, request: chat_pb2.ProviderConfigRequest, context: grpc.aio.ServicerContext):
         logger.info(f"==> [gRPC] Received config update from User: {request.user_id}")
@@ -60,7 +64,6 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
             config_dict["api_key"] = request.api_key
             config_dict["use_default_key"] = False
         
-        import json
         await container.redis_client.setex(
             f"user_config:{request.user_id}",
             86400,
@@ -128,7 +131,6 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
             user_config_data = await container.redis_client.get(f"user_config:{request.user_id}")
             if user_config_data:
                 try:
-                    import json
                     user_config = json.loads(user_config_data)
                     llm_provider = llm_provider or user_config.get("llm_provider")
                     api_key = api_key or user_config.get("api_key")
@@ -155,9 +157,9 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         
         is_anonymous = request.user_id.startswith("anon_")
 
-        async def run_stream(compiled_graph_instance):
+        async def run_stream(agent_graph_instance):
             nonlocal ai_full_response_text, final_state_messages, resolved_routing_domain
-            async for event in compiled_graph_instance.astream_events(initial_state, version="v2", config=trace_config):
+            async for event in agent_graph_instance.astream_events(initial_state, version="v2", config=trace_config):
                 if context.cancelled():
                     logger.info("==> [gRPC] Stream dropped by upstream proxy.")
                     break
@@ -183,7 +185,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                             if finish_reason in ("length", "max_tokens"):
                                 logger.warning(f"⚠️ [TOKEN LIMIT EXCEEDED] max_completion_tokens exceeded in {current_node}")
                                 
-                elif kind == "on_chain_end" and event["name"] == "compiled_graph":
+                elif kind == "on_chain_end" and event["name"] == "agent_graph":
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]
                     # 🚀 Intercept the terminal state domain configuration generated dynamically by the Supervisor
@@ -197,12 +199,12 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
 
         try:
             if is_anonymous:
-                graph = self.graph.compile(name="compiled_graph")
+                graph = self.graph.compile(name="agent_graph")
                 async for chunk_response in run_stream(graph):
                     yield chunk_response
             else:
                 async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph = self.graph.compile(checkpointer=saver,name="compiled_graph")
+                    graph = self.graph.compile(checkpointer=saver,name="agent_graph")
                     async for chunk_response in run_stream(graph):
                         yield chunk_response
 
@@ -226,10 +228,6 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
 
             # ─── SECURE CRYPTOGRAPHIC AI RESPONSE RECEIPT GENERATION (SOLUTION A) ───
             if ai_full_response_text:
-                import hashlib
-                import time
-                from app.core.asymmetric_helper import sign_data_es256
-
                 # Compute SHA-256 hash of the fully accumulated response text
                 response_hash = hashlib.sha256(ai_full_response_text.encode('utf-8')).hexdigest()
                 timestamp = int(time.time())

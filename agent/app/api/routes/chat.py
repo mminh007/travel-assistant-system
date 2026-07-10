@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 import app.core.logger as logger
 from app.bootstrap.container import container
-from app.graph.workflow import compiled_graph
+from app.graph.workflow import agent_graph
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from app.core.settings import settings
 # Import Langfuse and LangSmith tracing utilities
@@ -116,7 +116,7 @@ async def chat_stream_endpoint(
                         ai_full_response_text += content
                         yield f"data: {content}\n\n"
                         
-                elif kind == "on_chain_end" and event["name"] == "compiled_graph":
+                elif kind == "on_chain_end" and event["name"] == "agent_graph":
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]
                     resolved_domain = output_payload.get("current_domain", "general_memory")
@@ -129,12 +129,12 @@ async def chat_stream_endpoint(
 
         try:
             if is_anonymous:
-                graph_run = compiled_graph.compile(name="compiled_graph")
+                graph_run = agent_graph.compile(name="agent_graph")
                 async for chunk in run_graph_stream(graph_run):
                     yield chunk
             else:
                 async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph_run = compiled_graph.compile(checkpointer=saver,name="compiled_graph")
+                    graph_run = agent_graph.compile(checkpointer=saver,name="agent_graph")
                     async for chunk in run_graph_stream(graph_run):
                         yield chunk
             

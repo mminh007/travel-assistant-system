@@ -41,6 +41,7 @@ class AgentState(TypedDict):
     evaluator_feedback: Optional[str]
     evaluator_notes: Optional[str]
     needs_rework: Optional[bool]
+    fact_check_result: Optional[Dict[str, Any]]
     final_answer: Optional[str]
 
     # ─── CONTENT/EXTRACTION PIPELINE STATE ───

@@ -182,14 +182,7 @@ workflow.add_edge("action_tracker", "tools")
 workflow.add_edge("finding_extractor", "fact_checker")
 workflow.add_edge("fact_checker", "evaluator_agent")
 
-def route_back_to_agent(state: AgentState) -> str:
-    return "travel_react_agent"
-
-workflow.add_conditional_edges(
-    "tools",
-    route_back_to_agent,
-    {"travel_react_agent": "travel_react_agent"}
-)
+workflow.add_edge("tools", "travel_react_agent")
 
 # ─── PHASE 3: EVALUATION & SYNTHESIS PIPELINE ───
 
@@ -225,5 +218,5 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("final_synthesizer", END)
 
-compiled_graph = workflow
+agent_graph = workflow
 

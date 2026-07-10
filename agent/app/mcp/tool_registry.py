@@ -9,6 +9,9 @@ AGENT_TOOL_REGISTRY = {
     "travel": [
         "search_web",
         "search_hotel_database"
+    ],
+    "support": [
+        "search_hotel_database"
     ]
 }
 

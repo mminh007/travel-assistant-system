@@ -9,7 +9,7 @@ from app.services.hotel_sync_handler import process_hotel_sync_message
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-from app.graph.workflow import compiled_graph
+from app.graph.workflow import agent_graph
 
 logger = setup_app_logger("WorkerMainCore")
 
@@ -29,7 +29,7 @@ async def process_message(message: aio_pika.IncomingMessage):
             
             # Retrieve source of truth from Redis checkpointer
             async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                graph = compiled_graph.compile(checkpointer=saver)
+                graph = agent_graph.compile(checkpointer=saver)
                 config = {"configurable": {"thread_id": f"{user_id}_{session_id}"}}
                 state_snapshot = await graph.aget_state(config)
                 messages = state_snapshot.values.get("messages", [])
