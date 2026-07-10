@@ -10,10 +10,10 @@ from langfuse.langchain import CallbackHandler
 from langchain_core.tracers import LangChainTracer
 import app.core.logger as logger
 from app.core.settings import settings
-from app.core.asymmetric_helper import sign_data_es256
+from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.bootstrap.container import container
 from app.graph.workflow import agent_graph
-from app.services.rabbitmq_publisher import publish_extraction_task
+from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
 
 logger_instance = logger.setup_app_logger("ChatStreamService")
 

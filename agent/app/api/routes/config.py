@@ -1,10 +1,11 @@
 # app/api/routes/config.py
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Literal
 from app.bootstrap.container import container
 import json
-from app.core.crypto_helper import encrypt_value
+from app.core.helpers.crypto_helper import encrypt_value
 from app.api.auth import get_authenticated_user_id
 
 router = APIRouter(prefix="/config", tags=["Configuration"])

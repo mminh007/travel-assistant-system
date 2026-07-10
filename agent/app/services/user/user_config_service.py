@@ -1,7 +1,7 @@
 # app/services/user_config_service.py
 import json
 import app.core.logger as logger
-from app.core.crypto_helper import decrypt_value
+from app.core.helpers.crypto_helper import decrypt_value
 
 log = logger.setup_app_logger("UserConfigService")
 

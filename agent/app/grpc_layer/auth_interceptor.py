@@ -1,6 +1,6 @@
 import grpc
 from typing import Any, Callable, Awaitable
-from app.core.jwt_helper import verify_jwt
+from app.core.helpers.jwt_helper import verify_jwt
 from app.core.settings import settings
 import app.core.logger as logger
 

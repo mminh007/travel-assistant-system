@@ -1,7 +1,7 @@
 # app/mcp/local_tools.py
 from langchain_core.tools import tool
 from app.bootstrap.container import container
-from app.services.query_transformer import transform_user_query
+from app.services.llm.query_transformer import transform_user_query
 
 @tool
 async def search_hotel_database(

@@ -1,7 +1,7 @@
 # app/services/memory_worker.py
 from app.core.logger import setup_app_logger
-from app.services.fact_extractor import FactExtractor
-from app.services.memory_service import MemoryService
+from app.services.llm.fact_extractor import FactExtractor
+from app.services.memory_management.memory_service import MemoryService
 
 logger = setup_app_logger("AsyncMemoryWorker")
 

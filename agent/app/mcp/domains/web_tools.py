@@ -4,7 +4,7 @@ import os
 import tiktoken
 from tavily import TavilyClient
 from app.core.settings import settings
-from app.services.query_transformer import transform_user_query
+from app.services.llm.query_transformer import transform_user_query
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from app.graph.config import get_llm_instance, invoke_llm_with_limit

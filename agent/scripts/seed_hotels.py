@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.bootstrap.container import container
-from app.services.hotel_sync_handler import _build_document
+from app.services.background_tasks.hotel_sync_handler import _build_document
 
 # Database connection details from appsettings.json
 DB_CONNECTION_STRING = "Driver={ODBC Driver 17 for SQL Server};Server=host.docker.internal;Database=BookingDb;UID=sa;PWD=Password@123;TrustServerCertificate=yes;"

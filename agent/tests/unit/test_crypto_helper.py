@@ -2,7 +2,7 @@ import pytest
 import os
 import base64
 from app.core.settings import settings
-from app.core.crypto_helper import encrypt_value, decrypt_value, _get_active_keys
+from app.core.helpers.crypto_helper import encrypt_value, decrypt_value, _get_active_keys
 
 # Mock settings securely for tests
 class MockSecretStr:

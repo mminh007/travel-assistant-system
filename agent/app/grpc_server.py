@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "grpc_layer"))
 import chat_pb2
 import chat_pb2_grpc
 from langchain_core.messages import HumanMessage
-from app.services.rabbitmq_publisher import publish_extraction_task
+from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
 from app.core.logger import setup_app_logger
 from app.graph.workflow import agent_graph
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -20,9 +20,9 @@ from app.core.settings import settings
 from app.mcp.mcp_client import mcp_manager
 from app.bootstrap.startup import startup, shutdown
 from app.bootstrap.container import container
-from app.core.asymmetric_helper import sign_data_es256
-from app.core.crypto_helper import encrypt_value, decrypt_value
-from app.services.chat_stream_service import ChatStreamService
+from app.core.helpers.asymmetric_helper import sign_data_es256
+from app.core.helpers.crypto_helper import encrypt_value, decrypt_value
+from app.services.streaming.chat_stream_service import ChatStreamService
 
 from prometheus_client import Gauge, Counter
 from prometheus_client import start_http_server
@@ -124,7 +124,7 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         tier3_model = metadata.get("x-tier3-model")
 
         # ─── FALLBACK TO DYNAMIC USER CONFIG FROM REDIS ───
-        from app.services.user_config_service import load_user_llm_config
+        from app.services.user.user_config_service import load_user_llm_config
         user_config = await load_user_llm_config(request.user_id, container.redis_client)
         llm_provider = llm_provider or user_config.get("llm_provider")
         api_key = api_key or user_config.get("api_key")

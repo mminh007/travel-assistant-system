@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "my_agent": "./app/graph/workflow.py:compiled_graph"
+    "my_agent": "./app/graph/workflow.py:agent_graph"
   },
   "env": ".env.studio",
   "docker_arguments": {

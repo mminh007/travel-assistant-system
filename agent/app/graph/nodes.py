@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.graph.state import AgentState
-from app.services.query_transformer import transform_user_query
+from app.services.llm.query_transformer import transform_user_query
 from app.mcp.tool_registry import get_tools_by_domain
 from app.core.settings import settings
 from app.core.logger import setup_app_logger

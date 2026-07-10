@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # 🚀 Security Handshake Validation Layer (Solution A: HS256 JWT validation)
-from app.core.jwt_helper import verify_jwt
+from app.core.helpers.jwt_helper import verify_jwt
 client_token = os.environ.get("MCP_CLIENT_TOKEN")
 jwt_secret = os.environ.get("MCP_JWT_SECRET")
 

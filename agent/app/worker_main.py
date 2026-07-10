@@ -5,7 +5,7 @@ import sys
 import aio_pika
 from app.core.settings import settings
 from app.services import MemoryWorker
-from app.services.hotel_sync_handler import process_hotel_sync_message
+from app.services.background_tasks.hotel_sync_handler import process_hotel_sync_message
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver

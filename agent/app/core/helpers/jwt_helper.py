@@ -12,6 +12,11 @@ def base64url_decode(data: str) -> bytes:
     padding = '=' * (4 - (len(data) % 4))
     return base64.urlsafe_b64decode(data + padding)
 
+def _get_secret_value(secret: any) -> str:
+    if hasattr(secret, 'get_secret_value'):
+        return secret.get_secret_value()
+    return str(secret)
+
 def sign_jwt(payload: dict, secret: str) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     header_json = json.dumps(header, separators=(',', ':')).encode('utf-8')
@@ -19,8 +24,10 @@ def sign_jwt(payload: dict, secret: str) -> str:
     
     unsigned_token = base64url_encode(header_json) + "." + base64url_encode(payload_json)
     
+    actual_secret = _get_secret_value(secret)
+    
     signature = hmac.new(
-        secret.encode('utf-8'),
+        actual_secret.encode('utf-8'),
         unsigned_token.encode('utf-8'),
         hashlib.sha256
     ).digest()
@@ -37,8 +44,11 @@ def verify_jwt(token: str, secret: str) -> dict | None:
         
         # Verify signature
         unsigned_token = header_b64 + "." + payload_b64
+        
+        actual_secret = _get_secret_value(secret)
+        
         expected_sig = hmac.new(
-            secret.encode('utf-8'),
+            actual_secret.encode('utf-8'),
             unsigned_token.encode('utf-8'),
             hashlib.sha256
         ).digest()
@@ -59,3 +69,4 @@ def verify_jwt(token: str, secret: str) -> dict | None:
         return payload
     except Exception:
         return None
+

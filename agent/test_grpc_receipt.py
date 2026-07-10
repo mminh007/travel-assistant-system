@@ -7,7 +7,7 @@ import hashlib
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.core.settings import settings
-from app.core.asymmetric_helper import sign_data_es256, verify_data_es256
+from app.core.helpers.asymmetric_helper import sign_data_es256, verify_data_es256
 
 def test_ai_response_receipt_flow():
     print("=== Testing AI Response Receipt Cryptographic Flow ===")

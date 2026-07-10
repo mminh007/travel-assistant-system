@@ -1,5 +1,5 @@
 # app/api/routes/chat.py
-from app.services.rabbitmq_publisher import publish_extraction_task
+from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from app.core.settings import settings
 from langfuse.langchain import CallbackHandler
 from langchain_core.tracers import LangChainTracer
 from app.core.metrics import SSE_ACTIVE_STREAMS, SSE_DISCONNECT_TOTAL
-from app.services.chat_stream_service import ChatStreamService
+from app.services.streaming.chat_stream_service import ChatStreamService
 
 router = APIRouter(prefix="/chat", tags=["Agent Chat Ecosystem"])
 
@@ -40,7 +40,7 @@ async def chat_stream_endpoint(
     # Moved to ChatStreamService
 
     # ─── LOAD USER PROVIDER CONFIG FROM REDIS ───
-    from app.services.user_config_service import load_user_llm_config
+    from app.services.user.user_config_service import load_user_llm_config
     user_config = await load_user_llm_config(request.user_id, container.redis_client)
     api_key_override = user_config.get("api_key")
 
