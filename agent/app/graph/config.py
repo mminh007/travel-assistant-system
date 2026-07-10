@@ -35,6 +35,10 @@ def _get_settings_fingerprint() -> str:
     dicts embed this fingerprint in their keys, stale entries simply become
     unreachable — they are never returned and new instances are created.
     This is a zero-TTL, zero-background-thread invalidation strategy.
+
+    LIMITATION: This fingerprint is computed statically. Since `settings` are loaded
+    once at startup, changes to environment variables during a running process will 
+    not invalidate the cache. A process restart is required.
     """
     raw = (
         f"openai:{settings.openai.api_key}"

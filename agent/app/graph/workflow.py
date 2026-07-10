@@ -2,8 +2,6 @@
 import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-#from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-#import redis
 import hashlib
 from app.graph.state import AgentState
 from app.graph.nodes import (

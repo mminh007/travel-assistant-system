@@ -37,22 +37,3 @@ def get_tools_by_domain(domain: str) -> List[BaseTool]:
         if tool.name in allowed_tool_names
     ]
 
-
-def get_tools_for_agent(
-    domain: str,
-    all_available_tools: List[BaseTool]
-) -> List[BaseTool]:
-    """
-    Filters the available MCP tools based on the active agent domain.
-
-    If the domain is not registered, an empty list is returned
-    to prevent unnecessary token consumption and tool exposure.
-    """
-    allowed_tool_names = AGENT_TOOL_REGISTRY.get(domain, [])
-
-    filtered_tools = [
-        tool for tool in all_available_tools
-        if tool.name in allowed_tool_names
-    ]
-
-    return filtered_tools
