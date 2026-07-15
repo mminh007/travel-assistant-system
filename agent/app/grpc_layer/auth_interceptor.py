@@ -37,13 +37,28 @@ class UserOwnershipInterceptor(grpc.aio.ServerInterceptor):
                 if payload and "sub" in payload:
                     verified_user_id = payload["sub"]
 
-        # Proceed even if unauthenticated, but append the verified_user_id to metadata
-        # so individual handlers can enforce auth as needed.
-        if verified_user_id:
-            # We cannot easily modify handler_call_details.invocation_metadata since it's a tuple.
-            # We can pass it as a custom key. But we must reconstruct the metadata tuple.
-            new_metadata = list(handler_call_details.invocation_metadata)
-            new_metadata.append(("x-verified-user-id", verified_user_id))
-            handler_call_details = handler_call_details._replace(invocation_metadata=tuple(new_metadata))
+        if not verified_user_id:
+            handler = await continuation(handler_call_details)
+            if handler and handler.unary_unary:
+                async def reject_unary_unary(request, context):
+                    await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid authentication token")
+                return grpc.unary_unary_rpc_method_handler(reject_unary_unary)
+            elif handler and handler.unary_stream:
+                async def reject_unary_stream(request, context):
+                    await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid authentication token")
+                return grpc.unary_stream_rpc_method_handler(reject_unary_stream)
+            elif handler and handler.stream_unary:
+                async def reject_stream_unary(request, context):
+                    await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid authentication token")
+                return grpc.stream_unary_rpc_method_handler(reject_stream_unary)
+            elif handler and handler.stream_stream:
+                async def reject_stream_stream(request, context):
+                    await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid authentication token")
+                return grpc.stream_stream_rpc_method_handler(reject_stream_stream)
+            return handler
+
+        new_metadata = list(handler_call_details.invocation_metadata)
+        new_metadata.append(("x-verified-user-id", verified_user_id))
+        handler_call_details = handler_call_details._replace(invocation_metadata=tuple(new_metadata))
 
         return await continuation(handler_call_details)

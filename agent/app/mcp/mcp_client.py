@@ -51,7 +51,7 @@ class DynamicMcpClientManager:
                     env.update(config.get("env"))
 
                 # 🚀 JWT injection for security verification of the subprocess client identity
-                from app.core.helpers.jwt_helper import sign_jwt, _get_secret_value
+                from app.core.helpers.jwt_helper import sign_jwt
                 from app.core.settings import settings
                 import time
 
@@ -62,7 +62,6 @@ class DynamicMcpClientManager:
                 }
                 client_token = sign_jwt(payload, settings.mcp.jwt_secret)
                 env["MCP_CLIENT_TOKEN"] = client_token
-                env["MCP_JWT_SECRET"] = _get_secret_value(settings.mcp.jwt_secret)
 
                 logger.info(f"==> [MCP Client] Connecting to external server: '{server_name}' via stdio...")
                 

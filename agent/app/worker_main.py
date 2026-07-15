@@ -53,7 +53,7 @@ async def process_message(message: aio_pika.IncomingMessage):
             logger.error(f"❌ [Worker Core Loop Error] Failed to handle runtime message frame: {str(e)}\n")
 
             await message.reject(requeue=False)
-        logger.info("==> [DLQ] Message has been routed to Dead Letter Queue for manual review.\n")
+            logger.info("==> [DLQ] Message has been routed to Dead Letter Queue for manual review.\n")
 
 async def main():
     logger.info("⚙️ Memory Worker is booting and attempting connection hooks with RabbitMQ...")

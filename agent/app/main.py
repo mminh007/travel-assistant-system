@@ -22,8 +22,7 @@ async def lifespan(app: FastAPI):
     logger.info("⚙️ Bootstrapping application container...")
     await startup()
 
-    logger.info("⚙️ Connecting to external Upstream MCP Servers...")
-    await mcp_manager.initialize_all_servers()
+    logger.info("⚙️ Upstream MCP Servers are initialized by startup()...")
 
     logger.info("⚙️ Booting up internal background schedulers...")
     

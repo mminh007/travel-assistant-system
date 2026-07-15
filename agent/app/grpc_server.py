@@ -89,6 +89,12 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         return chat_pb2.ProviderConfigResponse(success=True, message=f"Configuration saved for user {request.user_id}")
 
     async def StreamChat(self, request: chat_pb2.ChatRequest, context: grpc.aio.ServicerContext):
+        if len(request.prompt) > 8000:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("Prompt exceeds maximum length of 8000 characters")
+            yield chat_pb2.ChatResponse()
+            return
+            
         metadata = context.invocation_metadata()
         correlation_id = "N/A"
         if metadata:
@@ -212,8 +218,7 @@ async def serve():
         server.add_insecure_port(listen_addr)
         logger.info(f"🚀 gRPC Core Engine started on {listen_addr}")
     
-    logger.info("⚙️ Connecting to external Upstream MCP Servers from gRPC Process...")
-    await mcp_manager.initialize_all_servers()
+    logger.info("⚙️ Upstream MCP Servers are initialized by startup()...")
 
     await server.start()
     await server.wait_for_termination()
