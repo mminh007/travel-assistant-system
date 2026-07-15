@@ -204,3 +204,9 @@ def build_workflow(mcp_tools: list):
     workflow.add_edge("final_synthesizer", END)
     return workflow
 
+async def create_agent_graph(config: dict | None = None, checkpointer=None, **kwargs):
+    """Graph factory for LangGraph Studio/CLI."""
+    from app.mcp.mcp_client import mcp_manager
+    tools = await mcp_manager.initialize_all_servers()
+    workflow = build_workflow(tools)
+    return workflow.compile(checkpointer=checkpointer)

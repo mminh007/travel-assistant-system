@@ -1,11 +1,20 @@
 import pytest
 import os
 import base64
-from app.core.helpers.crypto_helper import encrypt_value, decrypt_value, AES_GCM_MAC_LEN, AES_GCM_NONCE_LEN
+from app.core.helpers.crypto_helper import encrypt_value, decrypt_value
 from app.core.settings import settings
 
-def test_encrypt_decrypt_roundtrip():
+def test_encrypt_decrypt_roundtrip(monkeypatch):
     plaintext = "super_secret_api_key_123!"
+    
+    class DummySecret:
+        def __init__(self, val):
+            self.val = val
+        def get_secret_value(self):
+            return base64.b64encode(self.val).decode('utf-8')
+    monkeypatch.setattr(settings.security, "redis_encryption_key", DummySecret(os.urandom(32)))
+    monkeypatch.setattr(settings.security, "redis_encryption_old_key", None)
+    
     ciphertext = encrypt_value(plaintext)
     assert ciphertext is not None
     assert ciphertext != plaintext
@@ -33,14 +42,14 @@ def test_key_rotation_fallback(monkeypatch):
         def get_secret_value(self):
             return base64.b64encode(self.val).decode('utf-8')
             
-    monkeypatch.setattr(settings.crypto, "aes_primary_key", DummySecret(old_key))
-    monkeypatch.setattr(settings.crypto, "aes_fallback_keys", [])
+    monkeypatch.setattr(settings.security, "redis_encryption_key", DummySecret(old_key))
+    monkeypatch.setattr(settings.security, "redis_encryption_old_key", None)
     ciphertext_old = encrypt_value(plaintext)
     
     # Try decrypting with new key (fails, no fallback)
-    monkeypatch.setattr(settings.crypto, "aes_primary_key", DummySecret(new_key))
+    monkeypatch.setattr(settings.security, "redis_encryption_key", DummySecret(new_key))
     assert decrypt_value(ciphertext_old) is None
     
     # Try decrypting with new key + fallback
-    monkeypatch.setattr(settings.crypto, "aes_fallback_keys", [DummySecret(old_key)])
+    monkeypatch.setattr(settings.security, "redis_encryption_old_key", DummySecret(old_key))
     assert decrypt_value(ciphertext_old) == plaintext

@@ -9,6 +9,7 @@ import json
 from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.language_models.chat_models import BaseChatModel
+from app.graph.config import _resolve_provider_and_key
 
 from app.graph.state import AgentState
 from app.services.llm.query_transformer import transform_user_query
@@ -228,7 +229,6 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     base_llm = get_llm_instance(2, config)
     llm_with_tools = get_cached_bound_llm("travel", base_llm)
 
-    from app.graph.config import _resolve_provider_and_key
     provider, provider_cfg, _ = _resolve_provider_and_key(config)
     
     compiled_messages = prune_messages_by_token_limit(
