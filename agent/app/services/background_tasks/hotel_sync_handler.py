@@ -1,3 +1,4 @@
+# app/services/background_tasks/hotel_sync_handler.py   
 import json
 import aio_pika
 from app.core.logger import setup_app_logger

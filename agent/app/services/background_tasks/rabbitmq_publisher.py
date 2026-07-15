@@ -1,4 +1,4 @@
-# app/services/rabbitmq_publisher.py
+# app/services/background_tasks/rabbitmq_publisher.py
 import json
 import asyncio
 import aio_pika

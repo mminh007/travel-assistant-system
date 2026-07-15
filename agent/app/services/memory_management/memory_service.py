@@ -1,4 +1,4 @@
-# app/service/memory_service.py
+# app/services/memory_management/memory_service.py
 import time
 import uuid
 from app.interfaces import MemoryStore

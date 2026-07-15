@@ -1,4 +1,4 @@
-# app/services/pruning_policy.py
+# app/services/background_tasks/pruning_policy.py
 import time
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue

@@ -1,4 +1,4 @@
-# app/services/fact_extractor.py
+# app/services/llm/fact_extractor.py
 from pydantic import BaseModel, Field
 from typing import List, Literal
 from langchain_core.messages import SystemMessage, HumanMessage
