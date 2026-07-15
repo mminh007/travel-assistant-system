@@ -42,12 +42,22 @@ AgentState
 ├── user_id             → ID định danh người dùng
 ├── session_id          → ID phiên làm việc (session)
 │
+├── ── COST TRACKING & METRICS ──────────────────────────────────
+├── tier1_input_tokens  → Số token đầu vào của Tier 1
+├── tier1_output_tokens → Số token đầu ra của Tier 1
+├── tier2_input_tokens  → Số token đầu vào của Tier 2
+├── tier2_output_tokens → Số token đầu ra của Tier 2
+├── estimated_cost_usd  → Ước tính tổng chi phí (USD)
+├── cache_hit           → Đánh dấu nếu có cache hit
+│
 ├── ── PHASE 1: GUARDRAIL & INTENT CLASSIFICATION ──────────────
 ├── is_in_domain        → True nếu là yêu cầu du lịch (booking/faq), False nếu ngoài lề
 ├── intent_category     → Phân loại ý định ("hotel_booking" | "flight_booking" | "system_navigation_faq" | "itinerary_planning")
 ├── complexity          → Mức độ phức tạp ("low" | "medium" | "high")
 ├── objective           → Mục tiêu tổng quát chung
 ├── detected_language   → Ngôn ngữ được phát hiện của user prompt
+├── intent_confidence   → Điểm tin cậy của ý định (0.0 - 1.0)
+├── ambiguity_reason    → Lý do nếu ý định không rõ ràng
 │
 ├── ── PHASE 2: WORKFLOW MEMORY (PROCEDURAL STATE) ──────────────
 ├── tasks               → Danh sách tasks có cấu trúc (dict)
@@ -61,9 +71,11 @@ AgentState
 │
 └── ── EVALUATION MEMORY ─────────────────────────────────────────
     ├── evaluator_feedback  → Phản hồi chi tiết từ Evaluator
+    ├── evaluator_notes     → Các ghi chú của Evaluator
     ├── needs_rework        → Boolean chỉ định có cần executor làm lại không
     ├── raw_executor_output → Văn bản Markdown gốc từ Executor (đã qua extractor)
     ├── extracted_findings  → Tập hợp các phát hiện quan trọng dạng JSON
+    ├── fact_check_result   → Kết quả xác minh tính chính xác của thông tin (Fact Checker)
     └── final_answer        → (Dành riêng) Câu trả lời tổng hợp cuối cùng
 ```
 
@@ -76,15 +88,17 @@ AgentState
 | 0 | `input_guardrail` | Phân loại ý định, từ chối câu hỏi ngoài lề, đánh giá độ phức tạp. | Tier 1 (Fast) | Async Node |
 | 1 | `out_of_domain` | Trả lời tĩnh cho các câu hỏi không thuộc chuyên môn du lịch. | *(Không dùng LLM)* | Async Node |
 | 2 | `support_agent` | Xử lý FAQ và điều hướng hệ thống cơ bản mà không cần vào luồng sâu. | Tier 2 (Balanced) | Async Node |
-| 3 | `planner` | Phân rã mục tiêu phức tạp thành chuỗi 2-4 sub-tasks. | Tier 2 (Balanced) | Async Node |
-| 4 | `direct_executor_init` | Khởi tạo trạng thái cho luồng bypass khi complexity='low'. | *(Không dùng LLM)* | Async Node |
-| 5 | `travel_react_agent` | Executor ReAct chung xử lý lập luận, gọi tools và xuất Markdown. | Tier 2 (Balanced) | Async Node |
-| 6 | `action_tracker` | Interceptor ghi nhận hash và đếm tool calls trước khi thực thi. | *(Không dùng LLM)* | Async Node |
-| 7 | `tools` | Thực thi MCP tool calls (LangChain ToolNode). | *(External)* | ToolNode |
-| 8 | `finding_extractor` | Đọc Markdown của Executor và trích xuất ra JSON schema nghiêm ngặt. | Tier 1 (Fast) | Async Node |
-| 9 | `evaluator_agent` | Gộp chung đánh giá chất lượng (Critic) và Quyết định làm lại (Reflection). | Tier 2 (Balanced) | Async Node |
-| 10 | `task_manager` | Lưu kết quả, chuyển tiếp task, thực hiện Context Sandboxing. | *(Không dùng LLM)* | Async Node |
-| 11 | `final_synthesizer` | Tổng hợp toàn bộ findings & kết quả thô của các task thành báo cáo hoàn chỉnh. | Tier 2 (Balanced) | Async Node |
+| 3 | `clarification_agent` | Đặt câu hỏi làm rõ khi intent_confidence < 0.70. | Tier 1 (Fast) | Async Node |
+| 4 | `planner` | Phân rã mục tiêu phức tạp thành chuỗi 2-4 sub-tasks. | Tier 2 (Balanced) | Async Node |
+| 5 | `direct_executor_init` | Khởi tạo trạng thái cho luồng bypass khi complexity='low'. | *(Không dùng LLM)* | Async Node |
+| 6 | `travel_react_agent` | Executor ReAct chung xử lý lập luận, gọi tools và xuất Markdown. | Tier 2 (Balanced) | Async Node |
+| 7 | `action_tracker` | Interceptor ghi nhận hash và đếm tool calls trước khi thực thi. | *(Không dùng LLM)* | Async Node |
+| 8 | `tools` | Thực thi MCP tool calls (LangChain ToolNode). | *(External)* | ToolNode |
+| 9 | `finding_extractor` | Đọc Markdown của Executor và trích xuất ra JSON schema nghiêm ngặt. | Tier 1 (Fast) | Async Node |
+| 10 | `fact_checker` | Kiểm tra tính chính xác của các extracted_findings trước khi đánh giá. | Tier 2 (Balanced) | Async Node |
+| 11 | `evaluator_agent` | Gộp chung đánh giá chất lượng (Critic) và Quyết định làm lại (Reflection). | Tier 2 (Balanced) | Async Node |
+| 12 | `task_manager` | Lưu kết quả, chuyển tiếp task, thực hiện Context Sandboxing. | *(Không dùng LLM)* | Async Node |
+| 13 | `final_synthesizer` | Tổng hợp toàn bộ findings & kết quả thô của các task thành báo cáo hoàn chỉnh. | Tier 2 (Balanced) | Async Node |
 
 ---
 
@@ -140,18 +154,21 @@ flowchart TD
     START([" 🚀 User Request "]) --> IG
 
     subgraph PHASE0["⬛ Phase 0 — Intent Classification"]
-        IG["🧠 input_guardrail\nTier 1 LLM\nSets: is_in_domain, intent, complexity"]
+        IG["🧠 input_guardrail\nTier 1 LLM\nSets: is_in_domain, intent, complexity, confidence"]
         OOD["🚫 out_of_domain\nStatic Response"]
         SA["ℹ️ support_agent\nHandles FAQ/Navigation"]
+        CA["❓ clarification_agent\nHandles low confidence queries"]
     end
 
     IG -- "is_in_domain = False" --> OOD
+    IG -- "confidence < 0.70" --> CA
     IG -- "intent = 'system_navigation_faq'" --> SA
     IG -- "complexity = 'low'" --> DEI
     IG -- "complexity = 'medium' / 'high'" --> PL
 
     OOD --> END([" ✅ Final Response "])
     SA --> END
+    CA --> END
 
     subgraph PHASE1["⬛ Phase 1 — Planning"]
         PL["📋 planner\nTier 2 LLM\nDecomposes into 2–4 TaskItems"]
@@ -177,11 +194,13 @@ flowchart TD
 
     HOOKS -- "finding_extractor" --> FE
 
-    subgraph PHASE3["⬛ Phase 3 — 2-Phase Extraction"]
+    subgraph PHASE3["⬛ Phase 3 — 2-Phase Extraction & Fact Checking"]
         FE["🔍 finding_extractor\nTier 1 · Schema\nExtracts: result_summary + findings\nWrites: raw_executor_output, extracted_findings"]
+        FC["✅ fact_checker\nTier 2\nVerifies extracted findings against ground truth"]
     end
 
-    FE --> EA
+    FE --> FC
+    FC --> EA
 
     subgraph PHASE4["⬛ Phase 4 — Evaluation Loop"]
         EA["⚖️ evaluator_agent\nTier 2\nScores quality & sets needs_rework\nWrites: feedback, needs_rework"]
@@ -205,6 +224,7 @@ flowchart TD
 
 1.  **Sau `input_guardrail` (`route_from_guardrail`):**
     *   `is_in_domain = False` $\rightarrow$ `out_of_domain`.
+    *   `intent_confidence < 0.70` $\rightarrow$ `clarification_agent`.
     *   `intent_category == 'system_navigation_faq'` $\rightarrow$ `support_agent`.
     *   `complexity == 'low'` $\rightarrow$ `direct_executor_init`.
     *   Mặc định / Khác $\rightarrow$ `planner`.

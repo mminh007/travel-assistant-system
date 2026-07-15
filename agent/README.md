@@ -26,6 +26,8 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 | `user_id` / `session_id` | `str` | API entry | Executor nodes |
 | `is_in_domain` | `bool` | `input_guardrail` | `route_from_guardrail` |
 | `intent_category` | `str` | `input_guardrail` | `route_from_guardrail` |
+| `intent_confidence` | `float` | `input_guardrail` | `route_from_guardrail` |
+| `ambiguity_reason` | `str` | `input_guardrail` | `clarification_agent` |
 | `complexity` | `str` | `input_guardrail` | `route_from_guardrail` |
 | `objective` | `str` | `input_guardrail` | `planner`, `evaluator_agent` |
 | `detected_language` | `str` | `input_guardrail` | Various |
@@ -36,9 +38,11 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 | `action_history` | `List[str]` | `action_tracker` | `evaluate_tool_hooks` |
 | `rework_count` | `int` | `evaluator_agent` | `route_from_evaluator` |
 | `evaluator_feedback` | `str` | `evaluator_agent` | `travel_react_agent` |
+| `evaluator_notes` | `str` | `evaluator_agent` | `task_manager` |
 | `needs_rework` | `bool` | `evaluator_agent` | `route_from_evaluator` |
-| `raw_executor_output` | `str` | `finding_extractor` | `evaluator_agent`, `task_manager` |
-| `extracted_findings` | `List[Dict]` | `finding_extractor` | `evaluator_agent`, `task_manager` |
+| `raw_executor_output` | `str` | `finding_extractor` | `fact_checker`, `evaluator_agent`, `task_manager` |
+| `extracted_findings` | `List[Dict]` | `finding_extractor` | `fact_checker`, `evaluator_agent`, `task_manager` |
+| `fact_check_result` | `Dict` | `fact_checker` | `evaluator_agent` |
 
 ---
 
@@ -58,6 +62,11 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 #### `support_agent`
 - **LLM Tier:** Tier 2 (balanced)
 - **Description:** Handles basic system navigation and FAQ queries without entering the complex planning and execution pipeline.
+
+#### `clarification_agent`
+- **LLM Tier:** Tier 1 (fast)
+- **Activated When:** `intent_confidence` < 0.70
+- **Description:** Asks the user clarifying questions when their prompt is ambiguous or lacks enough detail to confidently route to a specific intent. Ends the workflow.
 
 ---
 
@@ -101,6 +110,11 @@ All nodes communicate exclusively through `AgentState`, a `TypedDict` that LangG
 - **Writes to State:** `raw_executor_output`, `extracted_findings`
 - **Description:** Receives the executor's raw Markdown, then applies a short, tightly-scoped structured-output LLM call to extract structured findings. **This is the only place where JSON is produced from executor content.** By isolating JSON extraction here, the risk of `JSONDecodeError` from code snippets or Markdown headers embedded in executor responses is eliminated entirely.
 
+#### `fact_checker`
+- **LLM Tier:** Tier 2 (balanced)
+- **Writes to State:** `fact_check_result`
+- **Description:** Verifies the extracted findings against available tools or logical consistency before evaluation. Ensures the agent doesn't hallucinate facts.
+
 ---
 
 ### Phase 4 — Evaluation & Rework
@@ -135,18 +149,21 @@ flowchart TD
     START([" 🚀 User Request "]) --> IG
 
     subgraph PHASE0["⬛ Phase 0 — Intent Classification"]
-        IG["🧠 input_guardrail\nTier 1 LLM\nSets: is_in_domain, intent, complexity"]
+        IG["🧠 input_guardrail\nTier 1 LLM\nSets: is_in_domain, intent, complexity, confidence"]
         OOD["🚫 out_of_domain\nStatic Response"]
         SA["ℹ️ support_agent\nHandles FAQ/Navigation"]
+        CA["❓ clarification_agent\nHandles low confidence queries"]
     end
 
     IG -- "is_in_domain = False" --> OOD
+    IG -- "intent_confidence < 0.70" --> CA
     IG -- "intent = 'system_navigation_faq'" --> SA
     IG -- "complexity = 'low'" --> DEI
     IG -- "complexity = 'medium' / 'high'" --> PL
 
     OOD --> END([" ✅ Final Response "])
     SA --> END
+    CA --> END
 
     subgraph PHASE1["⬛ Phase 1 — Planning"]
         PL["📋 planner\nTier 2 LLM\nDecomposes into 2–4 TaskItems"]
@@ -172,11 +189,13 @@ flowchart TD
 
     HOOKS -- "finding_extractor" --> FE
 
-    subgraph PHASE3["⬛ Phase 3 — 2-Phase Extraction"]
+    subgraph PHASE3["⬛ Phase 3 — 2-Phase Extraction & Fact Checking"]
         FE["🔍 finding_extractor\nTier 1 · Schema\nExtracts: result_summary + findings\nWrites: raw_executor_output, extracted_findings"]
+        FC["✅ fact_checker\nTier 2\nVerifies extracted findings against ground truth"]
     end
 
-    FE --> EA
+    FE --> FC
+    FC --> EA
 
     subgraph PHASE4["⬛ Phase 4 — Evaluation Loop"]
         EA["⚖️ evaluator_agent\nTier 2\nScores quality & sets needs_rework\nWrites: feedback, needs_rework"]
@@ -203,6 +222,7 @@ flowchart TD
 | Router Function | Source Node | Conditions | Targets |
 |---|---|---|---|
 | `route_from_guardrail` | `input_guardrail` | `is_in_domain == False` | `out_of_domain` |
+| | | `intent_confidence < 0.70` | `clarification_agent` |
 | | | `intent_category == 'system_navigation_faq'` | `support_agent` |
 | | | `complexity == 'low'` | `direct_executor_init` |
 | | | Default / `complexity == 'medium' / 'high'` | `planner` |
@@ -235,8 +255,8 @@ All safeguards are enforced in `evaluate_tool_hooks` and `route_from_evaluator` 
 
 | Tier | Usage | OpenAI Model | Claude Model |
 |---|---|---|---|
-| Tier 2 (Balanced) | `planner`, `travel_react_agent`, `evaluator_agent`, `support_agent`, `final_synthesizer` | `tier2_balanced_model` | `tier2_balanced_model` |
-| Tier 1 (Fast) | `input_guardrail`, `finding_extractor` | `tier1_fast_model` | `tier1_fast_model` |
+| Tier 2 (Balanced) | `planner`, `travel_react_agent`, `fact_checker`, `evaluator_agent`, `support_agent`, `final_synthesizer` | `tier2_balanced_model` | `tier2_balanced_model` |
+| Tier 1 (Fast) | `input_guardrail`, `clarification_agent`, `finding_extractor` | `tier1_fast_model` | `tier1_fast_model` |
 
 > Tier assignments are resolved from `settings.py` — never hardcoded in node logic. Changing a model in `.env` automatically propagates to all nodes using that tier.
 
