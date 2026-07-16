@@ -9,7 +9,6 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
-from app.mcp.tool_registry import get_tools_by_domain
 from app.core.concurrency import get_semaphore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import httpx
@@ -288,6 +287,7 @@ def get_cached_bound_llm(domain: str, base_llm: BaseChatModel) -> BaseChatModel:
 
     if cache_key not in _BOUND_LLM_CACHE:
         logger.info(f"==> [Tool Binder] Compiling and caching tools for domain: '{domain}' on {model_name}")
+        from app.mcp.tool_registry import get_tools_by_domain
         domain_tools = get_tools_by_domain(domain)
 
         if domain_tools:

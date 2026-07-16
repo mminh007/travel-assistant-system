@@ -1,6 +1,7 @@
 # app/graph/workflow.py
 import os
 from langgraph.graph import StateGraph, END
+from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import ToolNode
 import hashlib
 from app.graph.state import AgentState
@@ -19,11 +20,61 @@ from app.graph.nodes import (
 )
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
-from app.mcp.mcp_client import get_mcp_tools
+from app.mcp.mcp_client import get_mcp_tools, DynamicMcpClientManager
+import asyncio
 from app.core.logger import setup_app_logger
 from app.core.metrics import FORCED_TERMINATION_TOTAL, DUPLICATE_TOOL_CALL_TOTAL, GRAPH_ITERATIONS
 
 logger = setup_app_logger("WorkflowOrchestrator")
+
+_dev_mcp_manager: DynamicMcpClientManager | None = None
+_dev_mcp_lock: asyncio.Lock | None = None
+
+def _get_dev_lock() -> asyncio.Lock:
+    global _dev_mcp_lock
+    # Create the lock in the current event loop if it doesn't exist or if the event loop has changed
+    try:
+        loop = asyncio.get_running_loop()
+        if _dev_mcp_lock is None or getattr(_dev_mcp_lock, '_loop', None) is not loop:
+            _dev_mcp_lock = asyncio.Lock()
+    except RuntimeError:
+        _dev_mcp_lock = asyncio.Lock()
+    return _dev_mcp_lock
+
+async def _get_dev_tools() -> list:
+    """
+    Returns tools for the dev graph with session health checks.
+    
+    Logic:
+    1. If there is no manager → create new and initialize.
+    2. If already initialized → ping sessions to check if they are alive.
+    3. If a session is dead (due to hot-reload resetting the asyncio context) → reset() and re-initialize.
+    4. Always combine with LOCAL_TOOLS (no subprocess needed).
+    """
+    global _dev_mcp_manager
+
+    async with _get_dev_lock():
+        # First initialization
+        if _dev_mcp_manager is None:
+            _dev_mcp_manager = DynamicMcpClientManager()
+
+        # Health check if already initialized
+        if _dev_mcp_manager._is_initialized and _dev_mcp_manager.sessions:
+            sessions_alive = True
+            for name, session in _dev_mcp_manager.sessions.items():
+                try:
+                    await asyncio.wait_for(session.list_tools(), timeout=2.0)
+                except Exception as e:
+                    logger.warning(f"[DevGraph] Session '{name}' health check failed: {e}")
+                    sessions_alive = False
+                    break
+
+            if not sessions_alive:
+                logger.warning("[DevGraph] Dead MCP session detected after hot-reload. Re-initializing...")
+                await _dev_mcp_manager.reset()
+
+    # initialize_all_servers() has its own internal lock, so it's safe to call outside _dev_mcp_lock
+    return await _dev_mcp_manager.initialize_all_servers()
 
 agent_graph = None
 
@@ -204,9 +255,15 @@ def build_workflow(mcp_tools: list):
     workflow.add_edge("final_synthesizer", END)
     return workflow
 
-async def create_agent_graph(config: dict | None = None, checkpointer=None, **kwargs):
-    """Graph factory for LangGraph Studio/CLI."""
-    from app.mcp.mcp_client import mcp_manager
-    tools = await mcp_manager.initialize_all_servers()
+async def create_agent_graph(config: RunnableConfig | None = None):
+    """
+    Graph factory for LangGraph Studio / langgraph dev CLI.
+
+    Uses _dev_mcp_manager (isolated from the production mcp_manager) to ensure:
+    - Safe hot-reloading: sessions auto-recover when killed.
+    - Actual tool calls work because the session stays alive throughout the runtime.
+    - The production path is unaffected.
+    """
+    tools = await _get_dev_tools()
     workflow = build_workflow(tools)
-    return workflow.compile(checkpointer=checkpointer)
+    return workflow.compile()

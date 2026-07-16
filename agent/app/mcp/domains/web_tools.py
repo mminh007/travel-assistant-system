@@ -24,7 +24,7 @@ compression_prompt = ChatPromptTemplate.from_messages([
 async def _compress_snippet(query: str, snippet: str, config=None) -> str:
     llm_tier1_fast = get_llm_instance(tier=1, config=config)
     messages = compression_prompt.format_messages(query=query, snippet=snippet)
-    response = await invoke_llm_with_limit(1, llm_tier1_fast, messages, config=config)
+    response, usage = await invoke_llm_with_limit(1, llm_tier1_fast, messages, config=config)
     return str(response.content).strip()
 
 async def search_web_logic(query: str, history_summary: str = "") -> str:

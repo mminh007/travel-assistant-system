@@ -9,6 +9,11 @@ from mcp.client.stdio import stdio_client
 from langchain_mcp_adapters.tools import load_mcp_tools
 from app.core.logger import setup_app_logger
 
+# 🚀 JWT injection for security verification of the subprocess client identity
+from app.core.helpers.jwt_helper import sign_jwt
+from app.core.settings import settings
+import time
+
 logger = setup_app_logger("McpRuntimeGateway")
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "mcp_servers_config.json")
 
@@ -49,11 +54,6 @@ class DynamicMcpClientManager:
                 env = os.environ.copy()
                 if config.get("env"):
                     env.update(config.get("env"))
-
-                # 🚀 JWT injection for security verification of the subprocess client identity
-                from app.core.helpers.jwt_helper import sign_jwt
-                from app.core.settings import settings
-                import time
 
                 payload = {
                     "iss": "agent-orchestrator",
@@ -101,6 +101,24 @@ class DynamicMcpClientManager:
         """Safely closes connections upon container termination."""
         logger.info("🛑 Closing all upstream MCP Stdio Server connections...")
         await self.exit_stack.aclose()
+
+    async def reset(self):
+        """
+        Closes all current sessions and subprocesses, resetting the state to default.
+        Used by the dev graph factory upon detecting dead sessions (hot-reload).
+        MUST NOT be called from the production path.
+        """
+        async with self._lock:
+            logger.warning("[McpManager] Resetting all MCP sessions (dev hot-reload recovery)...")
+            try:
+                await self.exit_stack.aclose()
+            except Exception as e:
+                logger.warning(f"[McpManager] Error during exit_stack.aclose(): {e}")
+            self.exit_stack = AsyncExitStack()
+            self.sessions = {}
+            self.langchain_tools = []
+            self._is_initialized = False
+            logger.info("[McpManager] Reset complete. Ready for fresh initialization.")
 
 
 mcp_manager = DynamicMcpClientManager()

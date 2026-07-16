@@ -2,7 +2,8 @@
 from typing import List
 from langchain_core.tools import BaseTool
 from app.mcp.mcp_client import get_mcp_tools
-
+# Import local tools and combine them
+from app.mcp.local_tools import LOCAL_TOOLS
 # Define tool boundaries for each agent domain.
 # When the system grows to 100+ tools, only this registry needs to be updated.
 AGENT_TOOL_REGISTRY = {
@@ -25,8 +26,6 @@ def get_tools_by_domain(domain: str) -> List[BaseTool]:
     # Fetch the master pre-loaded tools list from the client manager cache
     all_mcp_tools = get_mcp_tools()
     
-    # Import local tools and combine them
-    from app.mcp.local_tools import LOCAL_TOOLS
     combined_tools = all_mcp_tools + LOCAL_TOOLS
     
     allowed_tool_names = AGENT_TOOL_REGISTRY.get(domain, [])

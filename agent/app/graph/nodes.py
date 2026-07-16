@@ -186,6 +186,46 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
     }
 
 
+def _sanitize_orphaned_tool_calls(messages: list) -> list:
+    """
+    Removes or neutralizes AIMessages that have tool_calls but lack a corresponding ToolMessage.
+    This occurs when evaluate_tool_hooks short-circuits to finding_extractor (e.g. safeguard triggered).
+    OpenAI/Anthropic strictly require every tool_call_id to be followed by a ToolMessage.
+    """
+    sanitized = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        # Check for AIMessages with tool_calls that were not responded to
+        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+            tool_call_ids = {tc['id'] for tc in msg.tool_calls}
+            # Look for corresponding ToolMessages in the remaining history
+            remaining = messages[i + 1:]
+            responded_ids = {
+                getattr(m, 'tool_call_id', None)
+                for m in remaining
+                if getattr(m, 'tool_call_id', None)
+            }
+            orphaned = tool_call_ids - responded_ids
+            if orphaned:
+                logger.warning(
+                    f"[MessageSanitizer] Removing orphaned tool_calls {orphaned} "
+                    f"from AIMessage (safeguard short-circuit). "
+                    f"Preserving text content if present."
+                )
+                # Keep the text content if available, discard tool_calls
+                text_content = msg.content if isinstance(msg.content, str) else ""
+                if text_content.strip():
+                    sanitized.append(AIMessage(content=text_content))
+                # Skip the entire message if there is no text content
+                i += 1
+                continue
+        sanitized.append(msg)
+        i += 1
+    return sanitized
+
+
+
 async def node_travel_react_agent(state: AgentState, config: RunnableConfig = None):
     """
     Node: TRAVEL_REACT_AGENT.
@@ -225,6 +265,7 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     compiled_messages = [SystemMessage(content=system_content)]
     compiled_messages.extend(state["messages"])
+    compiled_messages = _sanitize_orphaned_tool_calls(compiled_messages)
 
     base_llm = get_llm_instance(2, config)
     llm_with_tools = get_cached_bound_llm("travel", base_llm)
