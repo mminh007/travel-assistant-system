@@ -14,12 +14,9 @@ namespace Booking.Web.Services
     public class HotelService : IHotelService
     {
         private readonly AppDbContext _context;
-        private readonly HotelSyncPublisher _syncPublisher;
-
-        public HotelService(AppDbContext context, HotelSyncPublisher syncPublisher)
+        public HotelService(AppDbContext context)
         {
             _context = context;
-            _syncPublisher = syncPublisher;
         }
 
         public async Task<Hotel?> GetHotelDetailAsync(Guid id)

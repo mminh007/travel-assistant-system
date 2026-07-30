@@ -7,7 +7,6 @@ option csharp_namespace = "AgentApp.Protos";
 
 service AgentService {
   rpc StreamChat (ChatRequest) returns (stream ChatResponse);
-  rpc UpdateProviderConfig (ProviderConfigRequest) returns (ProviderConfigResponse);
 }
 
 message ChatRequest {
@@ -27,19 +26,4 @@ message Receipt {
   string response_hash = 3; 
   string signature = 4; 
   string key_id = 5;        
-}
-
-message ProviderConfigRequest {
-  string user_id = 1;
-  optional string llm_provider = 2;
-  optional string api_key = 3;
-  optional string base_url = 4;
-  optional string tier1_model = 5;
-  optional string tier2_model = 6;
-  optional string tier3_model = 7;
-}
-
-message ProviderConfigResponse {
-  bool success = 1;
-  string message = 2;
 }

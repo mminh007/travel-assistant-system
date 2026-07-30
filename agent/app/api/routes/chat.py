@@ -43,10 +43,6 @@ async def chat_stream_endpoint(
     # 🚀 OPTIMIZATION 1: Pass session_id and user_id directly to Langfuse
     # Moved to ChatStreamService
 
-    # ─── LOAD USER PROVIDER CONFIG FROM REDIS ───
-    from app.services.user.user_config_service import load_user_llm_config
-    user_config = await load_user_llm_config(request.user_id, container.redis_client)
-    api_key_override = user_config.get("api_key")
 
     SSE_ACTIVE_STREAMS.inc()
 
@@ -59,8 +55,6 @@ async def chat_stream_endpoint(
                 user_id=request.user_id,
                 session_id=request.session_id,
                 prompt=request.prompt,
-                llm_provider=user_config.get("llm_provider"),
-                api_key=api_key_override if not user_config.get("use_default_key") else None,
                 source="http"
             ):
                 if event_type == "chunk":

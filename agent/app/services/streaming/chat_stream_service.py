@@ -42,8 +42,6 @@ class ChatStreamService:
         user_id: str,
         session_id: str,
         prompt: str,
-        llm_provider: Optional[str] = None,
-        api_key: Optional[str] = None,
         is_cancelled_callback=None,
         source: str = "http",
     ) -> AsyncIterator[Tuple[str, Any]]:
@@ -78,9 +76,7 @@ class ChatStreamService:
                 "source": source
             },
             "configurable": {
-                "thread_id": f"{user_id}_{session_id}",
-                "llm_provider": llm_provider,
-                "api_key": api_key
+                "thread_id": f"{user_id}_{session_id}"
             }
         }
 

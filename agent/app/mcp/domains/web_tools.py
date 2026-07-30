@@ -58,7 +58,7 @@ async def search_web_logic(query: str, history_summary: str = "") -> str:
         MAX_TOOL_TOKEN_BUDGET = settings.tavily.max_token_budget  # Configurable via environment variables for flexible tuning
 
         try:
-            encoding = tiktoken.encoding_for_model(settings.openai.tier1_fast_model)
+            encoding = tiktoken.encoding_for_model(settings.nine_router.tier1_fast_model)
         except KeyError:
             encoding = tiktoken.get_encoding("cl100k_base")
 

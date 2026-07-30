@@ -17,11 +17,12 @@ logger = setup_app_logger("Container")
 def _resolve_default_provider() -> str:
     """
     Determine the system-level default provider based on which API key
-    is configured in .env. Priority: openai -> claude.
-    Note: Claude has no native embedding API, so OpenAI is used for embeddings.
+    is configured in .env. Priority: nine_router -> claude.
+    Note: Claude has no native embedding API, so OpenAI-compatible embeddings via 9Router are used.
     """
-    if settings.openai.api_key:
-        return "openai"
+    # 9Router acts as an OpenAI-compatible proxy; its api_key is always set (even if synthetic)
+    if settings.nine_router.api_key:
+        return "nine_router"
     return "claude"
 
 
@@ -33,22 +34,21 @@ def _resolve_cache_model_version(provider: str) -> str:
     """
     if provider == "claude":
         return settings.claude.tier2_balanced_model
-    return settings.openai.tier2_balanced_model
+    return settings.nine_router.tier2_balanced_model
 
 
 def _resolve_default_embedding(provider: str):
     """
     Create the embedding model instance.
-    Since only OpenAI embeddings are supported in the current stack, 
-    this always returns OpenAIEmbeddings regardless of the provider.
+    Routes through 9Router (OpenAI-compatible proxy) for embedding.
     Embedding MUST remain fixed per deployment to keep vector spaces compatible.
     """
-    api_key = settings.openai.api_key.get_secret_value() if settings.openai.api_key else None
-    logger.info(f"==> [Container] Using OpenAI embedding model")
+    api_key = settings.nine_router.api_key.get_secret_value() if settings.nine_router.api_key else None
+    logger.info(f"==> [Container] Using OpenAI-compatible embedding model via 9Router")
     return OpenAIEmbeddings(
         model="text-embedding-3-small",
         openai_api_key=api_key,
-        base_url=settings.openai.base_url
+        base_url=settings.nine_router.base_url
     )
 
 
@@ -66,12 +66,13 @@ def _resolve_default_memory_llm(provider: str):
             api_key=api_key
         )
     else:
-        api_key = settings.openai.api_key.get_secret_value() if settings.openai.api_key else None
-        model = settings.openai.tier1_fast_model
-        logger.info(f"==> [Container] Using OpenAI memory LLM: {model}")
+        # nine_router: OpenAI-compatible proxy — use ChatOpenAI pointed at 9Router base_url
+        api_key = settings.nine_router.api_key.get_secret_value() if settings.nine_router.api_key else None
+        model = settings.nine_router.tier1_fast_model
+        logger.info(f"==> [Container] Using 9Router memory LLM: {model}")
         return ChatOpenAI(
             model=model, temperature=0,
-            api_key=api_key, base_url=settings.openai.base_url
+            api_key=api_key, base_url=settings.nine_router.base_url
         )
 
 

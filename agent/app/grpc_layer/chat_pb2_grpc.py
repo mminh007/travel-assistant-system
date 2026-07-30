@@ -26,8 +26,7 @@ if _version_not_supported:
 
 
 class AgentServiceStub:
-    """Service định nghĩa các API
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -48,19 +47,16 @@ class AgentServiceStub:
 
 
 class AgentServiceServicer:
-    """Service định nghĩa các API
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def StreamChat(self, request, context):
-        """Hàm nhận 1 Request và trả về 1 Stream (luồng) các Response
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def UpdateProviderConfig(self, request, context):
-        """Hàm nhận cập nhật cấu hình Provider từ user
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -87,8 +83,7 @@ def add_AgentServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class AgentService:
-    """Service định nghĩa các API
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def StreamChat(request,

@@ -44,50 +44,6 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         self.graph = agent_graph
         self._bg_tasks = set()
 
-    async def UpdateProviderConfig(self, request: chat_pb2.ProviderConfigRequest, context: grpc.aio.ServicerContext):
-        logger.info(f"==> [gRPC] Received config update from User: {request.user_id}")
-        
-        metadata = dict(context.invocation_metadata())
-        verified_user_id = metadata.get("x-verified-user-id")
-        
-        if not verified_user_id:
-            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
-            context.set_details("Missing authentication")
-            return chat_pb2.ProviderConfigResponse(success=False, message="Unauthenticated")
-            
-        if verified_user_id != request.user_id:
-            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
-            context.set_details("Forbidden: cannot modify another user's config")
-            return chat_pb2.ProviderConfigResponse(success=False, message="Forbidden")
-        
-        if not container.redis_client:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details("Redis client not initialized.")
-            return chat_pb2.ProviderConfigResponse(success=False, message="Redis not initialized.")
-            
-        config_dict = {"user_id": request.user_id}
-        
-        if request.HasField("default"):
-            # User wants to use system default key for this provider
-            config_dict["llm_provider"] = request.default
-            config_dict["use_default_key"] = True
-        elif request.HasField("llm_provider"):
-            if not request.HasField("api_key"):
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("Custom provider requires an api_key.")
-                return chat_pb2.ProviderConfigResponse(success=False, message="Custom provider requires an api_key.")
-            config_dict["llm_provider"] = request.llm_provider
-            config_dict["api_key"] = encrypt_value(request.api_key) if request.api_key else None
-            config_dict["use_default_key"] = False
-        
-        await container.redis_client.setex(
-            f"user_config:{request.user_id}",
-            86400,
-            json.dumps(config_dict)
-        )
-        
-        return chat_pb2.ProviderConfigResponse(success=True, message=f"Configuration saved for user {request.user_id}")
-
     async def StreamChat(self, request: chat_pb2.ChatRequest, context: grpc.aio.ServicerContext):
         if len(request.prompt) > 8000:
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
@@ -119,31 +75,12 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         # 🚀 METRIC: Increment active stream gauge
         GRPC_ACTIVE_STREAMS.inc()
 
-        # Extract dynamic configuration from gRPC headers/metadata
-        metadata = {k.lower(): v for k, v in context.invocation_metadata()}
-        llm_provider = metadata.get("x-llm-provider")
-        # Header renamed from x-api-key to x-llm-token to avoid proxy logging capture
-        api_key = metadata.get("x-llm-token")
-        base_url = metadata.get("x-base-url")
-        tier1_model = metadata.get("x-tier1-model")
-        tier2_model = metadata.get("x-tier2-model")
-        tier3_model = metadata.get("x-tier3-model")
-
-        # ─── FALLBACK TO DYNAMIC USER CONFIG FROM REDIS ───
-        from app.services.user.user_config_service import load_user_llm_config
-        user_config = await load_user_llm_config(request.user_id, container.redis_client)
-        llm_provider = llm_provider or user_config.get("llm_provider")
-        api_key = api_key or user_config.get("api_key")
-        use_default_key = user_config.get("use_default_key", False)
-
         try:
             chat_service = ChatStreamService(bg_tasks=self._bg_tasks)
             async for event_type, data in chat_service.stream(
                 user_id=request.user_id,
                 session_id=request.session_id,
                 prompt=request.prompt,
-                llm_provider=llm_provider,
-                api_key=api_key,
                 is_cancelled_callback=context.cancelled,
                 source="grpc"
             ):

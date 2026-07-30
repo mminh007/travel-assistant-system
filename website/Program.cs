@@ -30,7 +30,6 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient<IAmadeusService, AmadeusService>();
 builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
-builder.Services.AddSingleton<HotelSyncPublisher>();
 
 builder.Services.AddSignalR();
 builder.Services.AddGrpcClient<AgentService.AgentServiceClient>(o => 

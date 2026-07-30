@@ -6,7 +6,6 @@ from typing import Dict, Any, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
 from app.core.concurrency import get_semaphore
@@ -17,9 +16,8 @@ from app.core.metrics import NODE_TRUNCATION_TOTAL
 logger = setup_app_logger("GraphConfig")
 
 # ─── SUPPORTED PROVIDERS ───
-# Only OpenAI and Anthropic are supported. Both offer native Function Calling
-# which guarantees reliable structured output parsing for Pydantic schemas.
-SUPPORTED_PROVIDERS = frozenset({"openai", "claude"})
+# We now use 9Router exclusively.
+
 
 
 # ─── SETTINGS FINGERPRINT (Cache Staleness Guard) ───
@@ -40,14 +38,10 @@ def _get_settings_fingerprint() -> str:
     not invalidate the cache. A process restart is required.
     """
     raw = (
-        f"openai:{settings.openai.api_key}"
-        f"|{settings.openai.tier1_fast_model}"
-        f"|{settings.openai.tier2_balanced_model}"
-        f"|{settings.openai.tier3_reasoning_model}"
-        f"|claude:{settings.claude.api_key}"
-        f"|{settings.claude.tier1_fast_model}"
-        f"|{settings.claude.tier2_balanced_model}"
-        f"|{settings.claude.tier3_reasoning_model}"
+        f"9router:{settings.nine_router.api_key}"
+        f"|{settings.nine_router.tier1_fast_model}"
+        f"|{settings.nine_router.tier2_balanced_model}"
+        f"|{settings.nine_router.tier3_reasoning_model}"
     )
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
@@ -58,12 +52,7 @@ _STRUCTURED_LLM_CACHE: Dict[str, Any] = {}
 _BOUND_LLM_CACHE: Dict[str, Any] = {}
 
 
-@lru_cache(maxsize=32)
-def _get_provider_settings(provider: str):
-    """Return the settings object for a supported provider."""
-    if provider == "claude":
-        return settings.claude
-    return settings.openai  # default
+
 
 
 def _build_llm_cache_key(provider: str, model_name: str, api_key_str: Optional[str], temperature: Optional[float] = None) -> str:
@@ -96,18 +85,9 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
     name per tier. Extracted to avoid duplication between get_llm_instance()
     and get_structured_llm().
     """
-    configurable = config.get("configurable", {}) if config else {}
-
-    # Priority: explicit user config → auto-detect from available API keys
-    provider = (configurable.get("llm_provider") or "").lower()
-    if provider not in SUPPORTED_PROVIDERS:
-        provider = "claude" if settings.claude.api_key else "openai"
-
-    provider_cfg = _get_provider_settings(provider)
-
-    api_key_str = configurable.get("api_key")
-    if not api_key_str:
-        api_key_str = provider_cfg.api_key.get_secret_value() if provider_cfg.api_key else None
+    provider = "9router"
+    provider_cfg = settings.nine_router
+    api_key_str = provider_cfg.api_key.get_secret_value() if provider_cfg.api_key else None
 
     return provider, provider_cfg, api_key_str
 
@@ -141,25 +121,15 @@ def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: floa
 
     if cache_key not in _LLM_INSTANCE_CACHE:
         logger.info(f"==> [LLM Factory] Instantiating {provider.upper()} model: {model_name} (Tier {tier}, Temp {temperature})")
-        if provider == "claude":
-            _LLM_INSTANCE_CACHE[cache_key] = ChatAnthropic(
-                model=model_name,
-                api_key=api_key_str,
-                max_completion_tokens=max_tokens,
-                temperature=temperature,
-                streaming=True,
-                max_retries=5,
-            )
-        else:  # openai
-            _LLM_INSTANCE_CACHE[cache_key] = ChatOpenAI(
-                model=model_name,
-                api_key=api_key_str,
-                base_url=base_url,
-                max_completion_tokens=max_tokens,
-                temperature=temperature,
-                streaming=True,
-                max_retries=5,
-            )
+        _LLM_INSTANCE_CACHE[cache_key] = ChatOpenAI(
+            model=model_name,
+            api_key=api_key_str,
+            base_url=base_url,
+            max_completion_tokens=max_tokens,
+            temperature=temperature,
+            streaming=True,
+            max_retries=5,
+        )
 
     return _LLM_INSTANCE_CACHE[cache_key]
 

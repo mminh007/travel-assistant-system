@@ -3,10 +3,12 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr, BaseModel, Field
 
-class OpenAISettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="OPENAI_", extra="ignore")
-    api_key: SecretStr | None = None
-    base_url: str = "https://models.inference.ai.azure.com"
+class NineRouterSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="NINE_ROUTER_", extra="ignore")
+    
+    api_key: SecretStr = "nine-router-key"  # 9Router manages real keys
+    base_url: str = "http://localhost:20128/v1"
+    
     # ─── LLM TIER CONFIGURATION ───
     # Tier 1: High-speed, ultra-low cost. Used for routing, classification, and background data extraction.
     tier1_fast_model: str = "gpt-4o-mini" 
@@ -17,41 +19,13 @@ class OpenAISettings(BaseSettings):
     tier2_temperature: float = 0.3
     
     # Tier 3: High-reasoning, expensive. Reserved strictly for complex academic analysis and vision matrix calculations.
-    tier3_reasoning_model: str = "o1-mini" # Or claude-3.5-sonnet if supporting multiple providers
+    tier3_reasoning_model: str = "o1-mini" 
     
     # Node specific
     fact_check_temperature: float = 0.0
     
     # ─── TOKEN GOVERNANCE ───
     max_completion_tokens: int = 1024  
-    max_context_tokens: int = 8192
-
-
-class ClaudeSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="CLAUDE_", extra="ignore")
-    
-    # Anthropic API Key (sk-ant-...)
-    api_key: SecretStr | None = None
-    
-    base_url: str = "https://api.anthropic.com"
-    
-    # ─── LLM TIER CONFIGURATION ───
-    # Tier 1: Fast, low-cost model (Claude 3 Haiku)
-    tier1_fast_model: str = "claude-3-haiku-20240307"
-    tier1_temperature: float = 0.0
-    
-    # Tier 2: Balanced reasoning (Claude 3.5 Sonnet)
-    tier2_balanced_model: str = "claude-3-5-sonnet-20240620"
-    tier2_temperature: float = 0.3
-    
-    # Tier 3: Highest reasoning (Claude 3 Opus)
-    tier3_reasoning_model: str = "claude-3-opus-20240229"
-    
-    # Node specific
-    fact_check_temperature: float = 0.0
-    
-    # ─── TOKEN GOVERNANCE ───
-    max_completion_tokens: int = 1024
     max_context_tokens: int = 8192
 
 # Redis configuration for short-term memory management and session state caching
@@ -134,8 +108,7 @@ class Settings(BaseSettings):
     """
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     
-    openai: OpenAISettings = Field(default_factory=OpenAISettings)
-    claude: ClaudeSettings = Field(default_factory=ClaudeSettings)
+    nine_router: NineRouterSettings = Field(default_factory=NineRouterSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
     rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)
