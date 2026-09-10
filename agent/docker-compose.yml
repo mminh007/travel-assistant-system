@@ -65,6 +65,10 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
       - QDRANT_SERVER_HOST=qdrant_server
       - QDRANT_SERVER_PORT=6333
+      - LLM_PROVIDER=${LLM_PROVIDER:-nine_router}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen2.5-7B-Instruct}
+      - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
     env_file:
       - .env
     depends_on:
@@ -94,6 +98,10 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
       - QDRANT_SERVER_HOST=qdrant_server
       - QDRANT_SERVER_PORT=6333
+      - LLM_PROVIDER=${LLM_PROVIDER:-nine_router}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen2.5-7B-Instruct}
+      - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
     env_file:
       - .env
     depends_on:

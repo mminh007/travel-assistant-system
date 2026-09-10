@@ -37,12 +37,18 @@ def _get_settings_fingerprint() -> str:
     once at startup, changes to environment variables during a running process will 
     not invalidate the cache. A process restart is required.
     """
-    raw = (
-        f"9router:{settings.nine_router.api_key}"
-        f"|{settings.nine_router.tier1_fast_model}"
-        f"|{settings.nine_router.tier2_balanced_model}"
-        f"|{settings.nine_router.tier3_reasoning_model}"
-    )
+    if settings.llm_provider == "vllm":
+        raw = (
+            f"vllm:{settings.vllm.api_key.get_secret_value()}"
+            f"|{settings.vllm.model}"
+        )
+    else:  # nine_router - unchanged
+        raw = (
+            f"9router:{settings.nine_router.api_key}"
+            f"|{settings.nine_router.tier1_fast_model}"
+            f"|{settings.nine_router.tier2_balanced_model}"
+            f"|{settings.nine_router.tier3_reasoning_model}"
+        )
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
@@ -85,6 +91,12 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
     name per tier. Extracted to avoid duplication between get_llm_instance()
     and get_structured_llm().
     """
+    if settings.llm_provider == "vllm":
+        provider_cfg = settings.vllm
+        api_key_str = provider_cfg.api_key.get_secret_value()
+        return "vllm", provider_cfg, api_key_str
+
+    # Existing 9Router branch
     provider = "9router"
     provider_cfg = settings.nine_router
     api_key_str = provider_cfg.api_key.get_secret_value() if provider_cfg.api_key else None
@@ -93,6 +105,21 @@ def _resolve_provider_and_key(config: RunnableConfig = None):
 
 
 def _resolve_tier_model_and_temp(tier: int, provider_cfg, temperature: float | None) -> tuple[str, float]:
+    # VllmSettings: has "model" attribute (base model) - tier models can be empty
+    if hasattr(provider_cfg, 'model'):
+        tier_model = {
+            1: provider_cfg.tier1_fast_model or provider_cfg.model,
+            2: provider_cfg.tier2_balanced_model or provider_cfg.model,
+            3: provider_cfg.tier3_reasoning_model or provider_cfg.model,
+        }.get(tier, provider_cfg.model)
+        default_temp = {
+            1: provider_cfg.tier1_temperature,
+            2: provider_cfg.tier2_temperature,
+            3: provider_cfg.tier3_temperature,
+        }.get(tier, 0.3)
+        return tier_model, temperature if temperature is not None else default_temp
+
+    # Existing NineRouterSettings logic
     if tier == 1:
         return provider_cfg.tier1_fast_model, temperature if temperature is not None else getattr(provider_cfg, "tier1_temperature", 0.0)
     elif tier == 2:

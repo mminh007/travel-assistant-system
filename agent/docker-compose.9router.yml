@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ninerouter:
+    image: node:20-alpine
+    container_name: booking_9router
+    ports:
+      - "20128:20128"
+    volumes:
+      - ninerouter_data:/root/.9router
+    command: >
+      sh -c "npm install -g 9router && 9router --no-browser --log --skip-update"
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:20128/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - agent_network
+
+volumes:
+  ninerouter_data:
+
+networks:
+  agent_network:
+    external: true

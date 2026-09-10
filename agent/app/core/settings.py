@@ -28,6 +28,36 @@ class NineRouterSettings(BaseSettings):
     max_completion_tokens: int = 1024  
     max_context_tokens: int = 8192
 
+class VllmSettings(BaseSettings):
+    """
+    Configuration for vLLM self-hosted on vast.ai.
+    Activate by setting: LLM_PROVIDER=vllm in .env
+    
+    vLLM exposes an OpenAI-compatible API — use ChatOpenAI with base_url.
+    """
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="VLLM_", extra="ignore")
+
+    # vast.ai endpoint: https://<hash>.vast.ai:<port>/v1
+    base_url: str = "http://localhost:8000/v1"
+
+    # Must match --served-model-name when launching vLLM
+    model: str = "Qwen2.5-7B-Instruct"
+
+    # vLLM doesn't require a real API key
+    api_key: SecretStr = SecretStr("EMPTY")
+
+    # Tier mapping — if empty, fallback to self.model
+    tier1_fast_model: str = ""
+    tier2_balanced_model: str = ""
+    tier3_reasoning_model: str = ""
+    tier1_temperature: float = 0.0
+    tier2_temperature: float = 0.3
+    tier3_temperature: float = 0.5
+
+    # Must match --max-model-len of the vLLM instance
+    max_completion_tokens: int = 1024
+    max_context_tokens: int = 8192
+
 # Redis configuration for short-term memory management and session state caching
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="REDIS_", extra="ignore")
@@ -108,6 +138,8 @@ class Settings(BaseSettings):
     """
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     
+    llm_provider: str = "nine_router"   # "nine_router" | "vllm"
+    vllm: VllmSettings = Field(default_factory=VllmSettings)
     nine_router: NineRouterSettings = Field(default_factory=NineRouterSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
