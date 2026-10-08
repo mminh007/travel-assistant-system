@@ -25,6 +25,8 @@ class RequestMetrics:
     total_latency_ms: float # End-to-end latency (ms)
     output_tokens: int      # Number of tokens generated
     throughput_tps: float   # tokens/second
+    prompt_tokens: Optional[int] = None  # Input tokens (from server usage)
+    token_count_source: str = "usage"    # "usage" (exact) | "sse_chunks" (fallback, approximate)
 
 
 @dataclass
@@ -62,19 +64,26 @@ async def measure_streaming_request(
     """
     Sends 1 request to vLLM and measures TTFT, TPOT, throughput.
     Uses SSE streaming to measure exact TTFT (ms when first token arrives).
+
+    Token counts come from the server-reported `usage` (enabled via
+    stream_options.include_usage). Counting SSE chunks is only a fallback:
+    one chunk may carry several tokens (e.g. speculative decoding) or none.
     """
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "stream": True,
+        "stream_options": {"include_usage": True},
         "temperature": 0.0,
     }
 
     start_time = time.perf_counter()
     first_token_time = None
-    token_times = []
-    token_count = 0
+    last_token_time = None
+    chunk_count = 0          # fallback only — approximate
+    prompt_tokens = None
+    completion_tokens = None
 
     async with client.stream(
         "POST",
@@ -90,44 +99,60 @@ async def measure_streaming_request(
             if data_str.strip() == "[DONE]":
                 break
             try:
-                import json as _json
-                data = _json.loads(data_str)
-                delta = data["choices"][0].get("delta", {}).get("content", "")
-                if delta:
-                    now = time.perf_counter()
-                    if first_token_time is None:
-                        first_token_time = now
-                    token_times.append(now)
-                    token_count += 1
-            except Exception:
+                data = json.loads(data_str)
+            except json.JSONDecodeError:
                 continue
+
+            # Final usage chunk has `usage` set and an empty `choices` list
+            usage = data.get("usage")
+            if usage:
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
+
+            choices = data.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta", {}).get("content", "")
+            if delta:
+                now = time.perf_counter()
+                if first_token_time is None:
+                    first_token_time = now
+                last_token_time = now
+                chunk_count += 1
 
     end_time = time.perf_counter()
 
     if first_token_time is None:
         raise ValueError("No tokens received from vLLM")
 
+    if completion_tokens is not None:
+        output_tokens = completion_tokens
+        source = "usage"
+    else:
+        output_tokens = chunk_count
+        source = "sse_chunks"
+        print("[WARN] Server did not return usage; token count is approximate (SSE chunks)")
+
     ttft_ms = (first_token_time - start_time) * 1000
     total_ms = (end_time - start_time) * 1000
 
-    # TPOT = average time between consecutive tokens (after first)
-    if len(token_times) > 1:
-        inter_token_times = [
-            (token_times[i] - token_times[i - 1]) * 1000
-            for i in range(1, len(token_times))
-        ]
-        tpot_ms = statistics.mean(inter_token_times)
+    # TPOT = decode time / number of tokens after the first
+    # (same definition as `vllm bench serve`)
+    if output_tokens > 1:
+        tpot_ms = (last_token_time - first_token_time) * 1000 / (output_tokens - 1)
     else:
         tpot_ms = 0.0
 
-    throughput_tps = token_count / (total_ms / 1000) if total_ms > 0 else 0
+    throughput_tps = output_tokens / (total_ms / 1000) if total_ms > 0 else 0
 
     return RequestMetrics(
         ttft_ms=ttft_ms,
         tpot_ms=tpot_ms,
         total_latency_ms=total_ms,
-        output_tokens=token_count,
+        output_tokens=output_tokens,
         throughput_tps=throughput_tps,
+        prompt_tokens=prompt_tokens,
+        token_count_source=source,
     )
 
 
@@ -154,7 +179,15 @@ def compute_stats(metrics: list[RequestMetrics]) -> dict:
 async def scrape_vllm_metrics(base_url: str) -> dict:
     """
     Scrape Prometheus metrics from vLLM /metrics endpoint.
-    Returns dictionary with important keys.
+    Returns dictionary with important keys:
+      - kv_cache_usage_pct     : current KV cache usage (0-100)
+      - prefix_cache_hits      : cumulative prefix-cache hit tokens (V1 counter)
+      - prefix_cache_queries   : cumulative prefix-cache queried tokens (V1 counter)
+      - prefix_cache_hit_rate  : hits / queries since server start (0-1)
+
+    Supports vLLM V1 names and the legacy V0 names. vLLM always attaches labels
+    (e.g. `{model_name="..."}`), so the metric name is parsed before `{`.
+    Values are summed across label sets (e.g. multiple engines).
     """
     metrics_url = base_url.replace("/v1", "") + "/metrics"
     try:
@@ -162,16 +195,35 @@ async def scrape_vllm_metrics(base_url: str) -> dict:
             response = await client.get(metrics_url)
             text = response.text
 
-        result = {}
+        raw: dict[str, float] = {}
         for line in text.splitlines():
-            if line.startswith("#"):
+            if not line or line.startswith("#"):
                 continue
-            if "vllm:gpu_cache_usage_perc" in line and "{" not in line:
-                result["kv_cache_usage_pct"] = float(line.split()[-1]) * 100
-            elif "vllm:cpu_prefix_cache_hit_rate" in line:
-                result["prefix_cache_hit_rate"] = float(line.split()[-1])
-            elif "vllm:gpu_prefix_cache_hit_rate" in line:
-                result["prefix_cache_hit_rate"] = float(line.split()[-1])
+            name = line.split("{", 1)[0].split(" ", 1)[0]
+            try:
+                value = float(line.rsplit(" ", 1)[-1])
+            except ValueError:
+                continue
+            raw[name] = raw.get(name, 0.0) + value
+
+        result = {}
+
+        # KV cache usage: V1 = kv_cache_usage_perc, V0 (deprecated) = gpu_cache_usage_perc
+        for name in ("vllm:kv_cache_usage_perc", "vllm:gpu_cache_usage_perc"):
+            if name in raw:
+                result["kv_cache_usage_pct"] = raw[name] * 100
+                break
+
+        # Prefix cache: V1 exposes hit/query counters, V0 exposed a hit-rate gauge
+        hits = raw.get("vllm:prefix_cache_hits_total", raw.get("vllm:prefix_cache_hits"))
+        queries = raw.get("vllm:prefix_cache_queries_total", raw.get("vllm:prefix_cache_queries"))
+        if hits is not None and queries is not None:
+            result["prefix_cache_hits"] = hits
+            result["prefix_cache_queries"] = queries
+            result["prefix_cache_hit_rate"] = hits / queries if queries > 0 else 0.0
+        elif "vllm:gpu_prefix_cache_hit_rate" in raw:
+            result["prefix_cache_hit_rate"] = raw["vllm:gpu_prefix_cache_hit_rate"]
+
         return result
     except Exception as e:
         print(f"[WARN] Could not scrape vLLM metrics: {e}")

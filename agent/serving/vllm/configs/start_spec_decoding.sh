@@ -5,9 +5,7 @@ DRAFT_MODEL="${VLLM_DRAFT_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}"
 vllm serve "$MAIN_MODEL" \
   --host 0.0.0.0 --port 8000 \
   --quantization awq_marlin \
-  --speculative-model "$DRAFT_MODEL" \
-  --num-speculative-tokens "${SPEC_TOKENS:-5}" \
+  --speculative-config "{\"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": ${SPEC_TOKENS:-5}}" \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.90 \
-  --enable-metrics \
   --served-model-name "$(basename $MAIN_MODEL)"

@@ -27,7 +27,6 @@ from app.core.metrics import (
     REWORK_CYCLES_BY_COMPLEXITY,
     SOFT_STOP_TRIGGER_TOTAL,
 )
-from app.bootstrap.container import container
 from app.graph.config import get_cached_bound_llm, get_structured_llm, get_llm_instance, invoke_llm_with_limit
 
 logger = setup_app_logger("CognitiveNodes")

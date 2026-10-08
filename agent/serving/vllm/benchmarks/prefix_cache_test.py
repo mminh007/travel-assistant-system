@@ -57,62 +57,62 @@ async def run_prefix_cache_test():
     print(f"System prompt length: ~{len(SYSTEM_PROMPT_PREFIX.split())} words")
     print("Running 20 sequential requests with identical system prompt prefix...\n")
 
+    # Snapshot counters before the test so the hit rate reflects ONLY this test
+    metrics_before = await scrape_vllm_metrics(BASE_URL)
+
     ttft_results = []
+    prompt_tokens_list = []
     async with httpx.AsyncClient() as client:
         for i, query in enumerate(USER_QUERIES):
             full_prompt = SYSTEM_PROMPT_PREFIX + query
-
-            payload = {
-                "model": MODEL,
-                "messages": [{"role": "user", "content": full_prompt}],
-                "max_tokens": 100,
-                "stream": True,
-                "temperature": 0.0,
-            }
-
-            start = time.perf_counter()
-            first_token_time = None
-            token_count = 0
-
-            async with client.stream(
-                "POST", f"{BASE_URL}/chat/completions",
-                json=payload, timeout=120.0
-            ) as resp:
-                async for line in resp.aiter_lines():
-                    if line.startswith("data: ") and line[6:].strip() != "[DONE]":
-                        try:
-                            d = json.loads(line[6:])
-                            if d["choices"][0].get("delta", {}).get("content"):
-                                if first_token_time is None:
-                                    first_token_time = time.perf_counter()
-                                token_count += 1
-                        except Exception:
-                            pass
-
-            ttft_ms = (first_token_time - start) * 1000 if first_token_time else -1
+            try:
+                m = await measure_streaming_request(
+                    client, BASE_URL, MODEL, full_prompt, max_tokens=100
+                )
+                ttft_ms = m.ttft_ms
+                if m.prompt_tokens is not None:
+                    prompt_tokens_list.append(m.prompt_tokens)
+            except Exception as e:
+                print(f"  [WARN] Request {i+1:02d} failed: {e}")
+                ttft_ms = -1
             ttft_results.append(ttft_ms)
             label = "COLD" if i == 0 else "WARM"
             print(f"  Request {i+1:02d} [{label}]: TTFT = {ttft_ms:.0f}ms")
 
-    # Scrape prefix cache hit rate
+    # Prefix cache hit rate for this test = delta(hits) / delta(queries)
     vllm_metrics = await scrape_vllm_metrics(BASE_URL)
-    hit_rate = vllm_metrics.get("prefix_cache_hit_rate", "N/A")
+    if "prefix_cache_queries" in vllm_metrics and "prefix_cache_queries" in metrics_before:
+        d_hits = vllm_metrics["prefix_cache_hits"] - metrics_before["prefix_cache_hits"]
+        d_queries = vllm_metrics["prefix_cache_queries"] - metrics_before["prefix_cache_queries"]
+        hit_rate = d_hits / d_queries if d_queries > 0 else 0.0
+    else:
+        # Legacy V0 gauge (cumulative since server start)
+        hit_rate = vllm_metrics.get("prefix_cache_hit_rate", "N/A")
 
+    valid = [t for t in ttft_results if t >= 0]
+    if len(valid) < 2 or ttft_results[0] < 0:
+        print("\n[ERROR] Not enough successful requests to compare cold vs warm")
+        return
     cold_ttft = ttft_results[0]
-    warm_ttfts = ttft_results[1:]
+    warm_ttfts = [t for t in ttft_results[1:] if t >= 0]
     avg_warm = sum(warm_ttfts) / len(warm_ttfts) if warm_ttfts else 0
     speedup = cold_ttft / avg_warm if avg_warm > 0 else 0
+    avg_prompt_tokens = (
+        sum(prompt_tokens_list) / len(prompt_tokens_list) if prompt_tokens_list else None
+    )
 
     print(f"\n── Results ──")
+    print(f"  Prompt tokens (avg, exact): {avg_prompt_tokens}")
     print(f"  Cold TTFT (req 1):  {cold_ttft:.0f}ms")
     print(f"  Warm TTFT (avg req 2-20): {avg_warm:.0f}ms")
     print(f"  Speedup: {speedup:.1f}x")
-    print(f"  vLLM Prefix Cache Hit Rate: {hit_rate}")
+    print(f"  vLLM Prefix Cache Hit Rate (this test): {hit_rate}")
 
     data = {
         "config": "awq_prefix_cache",
         "model": MODEL,
         "system_prompt_tokens_approx": len(SYSTEM_PROMPT_PREFIX.split()),
+        "prompt_tokens_avg": avg_prompt_tokens,
         "num_requests": len(USER_QUERIES),
         "cold_ttft_ms": cold_ttft,
         "warm_ttft_avg_ms": avg_warm,
