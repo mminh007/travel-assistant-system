@@ -20,7 +20,12 @@ class LongTermFacts(BaseModel):
 class FactExtractor:
     def __init__(self, llm_model):
         self.memory_llm = llm_model
-        self.structured_llm = self.memory_llm.with_structured_output(LongTermFacts)
+        try:
+            self.structured_llm = self.memory_llm.with_structured_output(LongTermFacts)
+            self._use_structured = True
+        except Exception:
+            self.structured_llm = self.memory_llm
+            self._use_structured = False
         
         self.prompt_instruction = (
             "You are an elite enterprise long-term memory extraction agent.\n"
@@ -41,6 +46,19 @@ class FactExtractor:
         if not conversation_text.strip():
             return None
             
+        if not getattr(self, "_use_structured", True):
+            import json
+            resp = await self.memory_llm.ainvoke([
+                SystemMessage(content=self.prompt_instruction + 
+                    '\n\nOutput a JSON object matching this schema: {"facts": [{"category": "...", "text": "...", "semantic_anchors": [...], "importance": 0.5}]}'),
+                HumanMessage(content=conversation_text)
+            ])
+            try:
+                data = json.loads(resp.content.replace("```json", "").replace("```", "").strip())
+                return LongTermFacts(**data)
+            except Exception:
+                return None
+
         extracted_data = await self.structured_llm.ainvoke([
             SystemMessage(content=self.prompt_instruction),
             HumanMessage(content=conversation_text)

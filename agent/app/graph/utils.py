@@ -4,6 +4,8 @@ import tiktoken
 from app.graph.state import AgentState
 from app.core.logger import setup_app_logger
 from app.core.metrics import NODE_INPUT_TOKENS, NODE_OUTPUT_TOKENS
+from app.core.cost_model import get_token_cost
+from app.core.settings import settings
 
 logger = setup_app_logger("CognitiveUtils")
 
@@ -11,13 +13,19 @@ def update_token_usage(state: AgentState, usage, node_name: str = "unknown") -> 
     """
     Updates token usage in state AND emits Prometheus metrics.
     node_name: Node name for per-node analysis in Grafana.
-    
-    LIMITATION: Cost figures are GPT-4o-based approximations and may be 
-    highly inaccurate for other models (e.g. Claude).
     """
-    cost_in = usage.input_tokens * (0.15 if usage.tier == 1 else 5.0) / 1000000
-    cost_out = usage.output_tokens * (0.60 if usage.tier == 1 else 15.0) / 1000000
-    cost = cost_in + cost_out
+    # Resolve active model name for accurate pricing
+    if settings.llm_provider == "vllm":
+        model_name = settings.vllm.tier1_fast_model or settings.vllm.model if usage.tier == 1 else \
+                     settings.vllm.tier2_balanced_model or settings.vllm.model
+    else:
+        model_name = settings.nine_router.tier1_fast_model if usage.tier == 1 else \
+                     settings.nine_router.tier2_balanced_model
+
+    cost_in, cost_out, cost = get_token_cost(model_name, usage.input_tokens, usage.output_tokens)
+
+    if cost == 0.0 and usage.input_tokens > 0 and settings.llm_provider != "vllm":
+        logger.warning(f"[CostModel] Unknown pricing for model '{model_name}' — cost tracked as $0")
 
     tier_str = str(usage.tier)
 

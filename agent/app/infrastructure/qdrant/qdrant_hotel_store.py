@@ -28,6 +28,17 @@ class QdrantHotelStore:
         )
         self.sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
 
+    @property
+    def collection_name(self) -> str:
+        """
+        Returns the active hotels collection name based on the current LLM provider.
+        vLLM uses a dedicated collection (hotels_collection_vllm) because Qwen3-Embedding-4B
+        produces 2560-dim vectors — incompatible with the 1536-dim nine_router collection.
+        """
+        if settings.llm_provider == "vllm":
+            return settings.qdrant.vllm_hotels_collection_name
+        return settings.qdrant.hotels_collection_name
+
     def _ensure_hotel_collection(self, dense_dim: int):
         """Creates hotels_collection with appropriate indexes for the Hotel domain."""
         if self.client.collection_exists(settings.qdrant.hotels_collection_name):

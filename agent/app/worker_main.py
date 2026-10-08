@@ -7,7 +7,7 @@ from app.core.settings import settings
 from app.services import MemoryWorker
 from app.services.background_tasks.hotel_sync_handler import process_hotel_sync_message
 from app.core.logger import setup_app_logger
-from app.bootstrap.container import container
+from app.bootstrap.container import container, _resolve_active_collections
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from app.graph import workflow
 from app.bootstrap.startup import startup
@@ -23,7 +23,14 @@ async def process_message(message: aio_pika.IncomingMessage):
             payload = json.loads(message.body.decode())
             user_id = payload.get("user_id")
             session_id = payload.get("session_id")
-            target_collection = payload.get("target_rag_domain", "general_memory")  # 🚀 Extract dynamic collection destination
+            rag_domain = payload.get("target_rag_domain", "general_memory")
+
+            # Resolve the actual Qdrant collection name for the active provider.
+            # _resolve_active_collections() returns (memory_collection, hotels_collection).
+            # The rag_domain from the publisher is a logical domain tag (e.g. "travel",
+            # "general_memory") — all of them map to the same long-term memory collection.
+            active_memory_collection, _ = _resolve_active_collections()
+            target_collection = active_memory_collection
             codename = payload.get("codename_process")
             
             logger.info(f"==> [Worker Event] Processing Payload | Action: {codename} | Target Partition: {target_collection}")
@@ -40,12 +47,8 @@ async def process_message(message: aio_pika.IncomingMessage):
                 await message.ack()
                 return
             
-            memory_worker = MemoryWorker(
-                memory_service= container.memory_service,
-                extractor= container.extractor
-            )
             # Pass collection name downstream to isolate storage tasks
-            await memory_worker.process_extraction_task(user_id, target_collection, messages)
+            await container.memory_worker.process_extraction_task(user_id, target_collection, messages)
             
             logger.info(f"==> [Worker Resolution] Task resolved successfully for Session: {session_id}\n")
             

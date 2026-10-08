@@ -7,5 +7,4 @@ vllm serve "$MODEL" \
   --kv-cache-dtype fp8 \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.90 \
-  --enable-metrics \
   --served-model-name "$(basename $MODEL)"

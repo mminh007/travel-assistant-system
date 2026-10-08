@@ -32,16 +32,28 @@ class VllmSettings(BaseSettings):
     """
     Configuration for vLLM self-hosted on vast.ai.
     Activate by setting: LLM_PROVIDER=vllm in .env
-    
-    vLLM exposes an OpenAI-compatible API — use ChatOpenAI with base_url.
+
+    Vast.ai deployment runs TWO separate vLLM processes:
+      - Process 1 (LLM)       : port 8000 — serves the chat/reasoning model
+      - Process 2 (Embedding) : port 8001 — serves the embedding model
+
+    vLLM exposes an OpenAI-compatible API:
+      - Chat:      POST /v1/chat/completions  (ChatOpenAI)
+      - Embedding: POST /v1/embeddings        (OpenAIEmbeddings)
+
+    ⚠️ PORT CONFIGURATION WARNING:
+    The agent API server runs on port 8080 to avoid conflicts with default vLLM port 8000.
+    If you change agent port back to 8000, VLLM_BASE_URL MUST point to a DIFFERENT HOST 
+    (e.g., vast.ai remote URL). Never run vLLM on the same host:port as the agent API server.
     """
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VLLM_", extra="ignore")
 
-    # vast.ai endpoint: https://<hash>.vast.ai:<port>/v1
+    # ─── PROCESS 1: LLM Server (port 8000) ───
+    # vast.ai endpoint: http://<hash>.vast.ai:8000/v1
     base_url: str = "http://localhost:8000/v1"
 
     # Must match --served-model-name when launching vLLM
-    model: str = "Qwen2.5-7B-Instruct"
+    model: str = "Qwen/Qwen2.5-7B-Instruct"
 
     # vLLM doesn't require a real API key
     api_key: SecretStr = SecretStr("EMPTY")
@@ -58,6 +70,17 @@ class VllmSettings(BaseSettings):
     max_completion_tokens: int = 1024
     max_context_tokens: int = 8192
 
+    # ─── PROCESS 2: Embedding Server (port 8001) ───
+    # vast.ai endpoint: http://<hash>.vast.ai:8001/v1
+    embedding_base_url: str = "http://localhost:8001/v1"
+
+    # Must match --served-model-name of the embedding vLLM process
+    # Qwen3-Embedding-4B outputs 2560 dims; chosen for quality over 0.6B (1024 dims)
+    embedding_model: str = "Qwen/Qwen3-Embedding-4B"
+
+    # vLLM embedding server also uses a dummy key
+    embedding_api_key: SecretStr = SecretStr("EMPTY")
+
 # Redis configuration for short-term memory management and session state caching
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="REDIS_", extra="ignore")
@@ -67,8 +90,17 @@ class RedisSettings(BaseSettings):
 # Qdrant configuration for vector storage management
 class QdrantSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="QDRANT_", extra="ignore")
+
+    # ─── nine_router / claude provider collections (text-embedding-3-small → 1536 dims) ───
     collection_name: str = "long_term_memory"
     hotels_collection_name: str = "hotels_collection"
+
+    # ─── vLLM provider collections (Qwen3-Embedding-4B → 2560 dims) ───
+    # Separate names prevent dimension-mismatch errors when switching providers.
+    # The active collection is resolved at runtime by _resolve_active_collection().
+    vllm_collection_name: str = "long_term_memory_vllm"
+    vllm_hotels_collection_name: str = "hotels_collection_vllm"
+
     server_host: str = "localhost"
     server_port: str = "6333"
 
@@ -131,10 +163,16 @@ class GrpcSettings(BaseSettings):
 
 class Settings(BaseSettings):
     """Unified application configuration manager grouping domain-specific sub-models.
-    
-    Supported LLM providers: OpenAI and Anthropic (Claude) only.
-    These providers offer native Function Calling with the highest reliability
-    for structured output schemas used throughout the agent graph.
+
+    Supported LLM providers (llm_provider field):
+      - "nine_router" (default): OpenAI-compatible proxy routing through 9Router.
+        Embedding: text-embedding-3-small (1536 dims) via nine_router.
+      - "vllm": Self-hosted vLLM on vast.ai running TWO processes:
+          Process 1 — LLM inference (e.g. Qwen2.5-7B-Instruct) on port 8000
+          Process 2 — Embedding   (e.g. Qwen3-Embedding-4B, 2560 dims) on port 8001
+        Both processes expose the OpenAI-compatible API.
+        Qdrant uses dedicated collections (vllm_collection_name) to avoid
+        dimension-mismatch with the nine_router collections.
     """
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     

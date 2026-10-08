@@ -16,7 +16,8 @@ from app.core.metrics import NODE_TRUNCATION_TOTAL
 logger = setup_app_logger("GraphConfig")
 
 # ─── SUPPORTED PROVIDERS ───
-# We now use 9Router exclusively.
+# Supported: "nine_router" (default), "vllm" (self-hosted)
+# Switch via LLM_PROVIDER env var. See settings.py for configuration.
 
 
 

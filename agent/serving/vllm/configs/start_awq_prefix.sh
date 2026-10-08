@@ -9,5 +9,4 @@ vllm serve "$MODEL" \
   --enable-prefix-caching \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.90 \
-  --enable-metrics \
   --served-model-name "$(basename $MODEL)"

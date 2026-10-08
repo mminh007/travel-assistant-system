@@ -16,7 +16,7 @@ async def transform_user_query(latest_message: str, history_summary: str = "", c
     llm_tier1_fast = get_llm_instance(tier=1, config=config)
     
     messages = transform_prompt.format_messages(context=history_summary, latest_message=latest_message)
-    response = await invoke_llm_with_limit(1, llm_tier1_fast, messages, config=config)
+    response, _ = await invoke_llm_with_limit(1, llm_tier1_fast, messages, config=config)
     optimized_query = str(response.content).strip().strip('"')
     logger.info(f"==> [Query Transformation] '{latest_message[:30]}...' -> '{optimized_query}'")
     return optimized_query

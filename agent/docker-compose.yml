@@ -54,9 +54,9 @@ services:
   agent_api:
     build: .
     container_name: booking_api_server
-    command: ["./entrypoint.sh", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["./entrypoint.sh", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
-      - "8000:8000"   
+      - "8080:8080"   
     volumes:
       - ./:/app
       - ${LOGS_DIR:-./logs}:/app/logs 

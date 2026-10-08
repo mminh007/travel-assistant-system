@@ -9,5 +9,4 @@ vllm serve "$MODEL" \
   --port 8000 \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.85 \
-  --enable-metrics \
   --served-model-name "$(basename $MODEL)"
