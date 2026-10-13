@@ -1,8 +1,4 @@
 # app/core/concurrency.py
-"""
-Global rate-limit guards for GitHub Models (and compatible providers).
-GitHub Models High tier: 10 RPM, 50 RPD, 2 concurrent requests.
-"""
 import asyncio
 from app.core.settings import settings
 
