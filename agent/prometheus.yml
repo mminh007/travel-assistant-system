@@ -1,11 +1,32 @@
 global:
-  scrape_interval: 5s 
+  scrape_interval: 5s
 
 scrape_configs:
   - job_name: "http-metrics"
     static_configs:
-      - targets: ["agent_api_server:8000"] 
+      - targets: ["agent_api_server:8000"]
 
   - job_name: "grpc-metrics"
     static_configs:
       - targets: ["agent_grpc_server:8001"]
+
+  # ── vLLM LLM server (running externally on vast.ai or localhost) ──
+  # VLLM_METRICS_HOST is injected via docker-compose environment
+  - job_name: "vllm-llm"
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["${VLLM_METRICS_HOST:-host.docker.internal:8000}"]
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: instance
+        replacement: "vllm-llm"
+
+  # ── vLLM Embedding server ──
+  - job_name: "vllm-embedding"
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["${VLLM_EMBEDDING_METRICS_HOST:-host.docker.internal:8001}"]
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: instance
+        replacement: "vllm-embedding"
