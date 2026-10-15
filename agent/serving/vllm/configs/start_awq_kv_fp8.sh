@@ -4,7 +4,7 @@
 MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
 echo "[vLLM] Starting LLM — Model: $MODEL"
 vllm serve "$MODEL" \
-  --host 0.0.0.0 --port 8000 \
+  --host 0.0.0.0 --port 8080 \
   --dtype float16 \
   --quantization awq_marlin \
   --kv-cache-dtype fp8 \
@@ -14,6 +14,4 @@ vllm serve "$MODEL" \
   --max-num-batched-tokens 512 \
   --enable-prefix-caching \
   --max-num-seqs 64 \
-  --disable-log-requests \
-  --uvicorn-log-level warning \
   --served-model-name "$(basename $MODEL)"

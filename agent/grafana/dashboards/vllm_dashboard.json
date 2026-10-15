@@ -1,0 +1,339 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "vLLM LLM & Embedding server metrics — KV cache, throughput, latency, queue depth",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100, "title": "🖥️  LLM Server (port 8000)", "type": "row" },
+
+    {
+      "id": 1, "type": "gauge",
+      "title": "KV Cache Usage %",
+      "description": "Percentage of KV cache slots currently occupied. Above 90 % → OOM risk.",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} * 100",
+          "legendFormat": "KV Cache"
+        }
+      ]
+    },
+
+    {
+      "id": 2, "type": "stat",
+      "title": "Prefix Cache Hit Rate",
+      "description": "Ratio of prompt tokens served from prefix cache. Higher = fewer recomputes.",
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.3 },
+              { "color": "green", "value": 0.6 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(vllm:prefix_cache_hits_total{instance=\"vllm-llm\"}[1m]) / clamp_min(rate(vllm:prefix_cache_queries_total{instance=\"vllm-llm\"}[1m]), 1)",
+          "legendFormat": "Hit Rate"
+        }
+      ]
+    },
+
+    {
+      "id": 3, "type": "stat",
+      "title": "Running Requests",
+      "description": "Requests currently being decoded (in-flight).",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 32 },
+              { "color": "red", "value": 56 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_requests_running{instance=\"vllm-llm\"}",
+          "legendFormat": "Running"
+        }
+      ]
+    },
+
+    {
+      "id": 4, "type": "stat",
+      "title": "Waiting Requests (Queue)",
+      "description": "Requests queued waiting for a free slot. Persistent > 0 means GPU saturated.",
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_requests_waiting{instance=\"vllm-llm\"}",
+          "legendFormat": "Waiting"
+        }
+      ]
+    },
+
+    {
+      "id": 5, "type": "stat",
+      "title": "GPU Cache Blocks Free",
+      "description": "Number of free GPU KV cache blocks remaining.",
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_gpu_blocks_free{instance=\"vllm-llm\"}",
+          "legendFormat": "Free Blocks"
+        }
+      ]
+    },
+
+    {
+      "id": 6, "type": "stat",
+      "title": "Avg Generation Throughput",
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "legendFormat": "tok/s"
+        }
+      ]
+    },
+
+    {
+      "id": 10, "type": "timeseries",
+      "title": "KV Cache Usage Over Time",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} * 100",
+          "legendFormat": "KV Cache %"
+        }
+      ]
+    },
+
+    {
+      "id": 11, "type": "timeseries",
+      "title": "Request Queue Depth",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_requests_running{instance=\"vllm-llm\"}",
+          "legendFormat": "Running"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_requests_waiting{instance=\"vllm-llm\"}",
+          "legendFormat": "Waiting"
+        }
+      ]
+    },
+
+    {
+      "id": 12, "type": "timeseries",
+      "title": "TTFT — Time To First Token (p50 / p95 / p99)",
+      "description": "Latency until first token is generated. Dominated by prefill compute.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": {
+        "defaults": { "unit": "ms",
+          "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "legendFormat": "TTFT p50"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "legendFormat": "TTFT p95"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.99, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "legendFormat": "TTFT p99"
+        }
+      ]
+    },
+
+    {
+      "id": 13, "type": "timeseries",
+      "title": "TPOT — Time Per Output Token (p50 / p95)",
+      "description": "Decode latency per token. Bandwidth-bound; higher = decode congestion.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": {
+        "defaults": { "unit": "ms",
+          "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "legendFormat": "TPOT p50"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "legendFormat": "TPOT p95"
+        }
+      ]
+    },
+
+    {
+      "id": 14, "type": "timeseries",
+      "title": "Token Throughput (Prompt + Generation)",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 21 },
+      "fieldConfig": {
+        "defaults": { "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 8 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(vllm:prompt_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "legendFormat": "Prompt tok/s"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "legendFormat": "Generation tok/s"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "id": 200, "title": "🔢  Embedding Server (port 8001)", "type": "row" },
+
+    {
+      "id": 20, "type": "stat",
+      "title": "Embedding — Running Requests",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 29 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "vllm:num_requests_running{instance=\"vllm-embedding\"}",
+          "legendFormat": "Running"
+        }
+      ]
+    },
+
+    {
+      "id": 21, "type": "stat",
+      "title": "Embedding — Throughput (tok/s)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 29 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(vllm:prompt_tokens_total{instance=\"vllm-embedding\"}[1m])",
+          "legendFormat": "Embed tok/s"
+        }
+      ]
+    },
+
+    {
+      "id": 22, "type": "timeseries",
+      "title": "Embedding — E2E Latency (p50 / p95)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 29 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m])) * 1000",
+          "legendFormat": "E2E p50"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m])) * 1000",
+          "legendFormat": "E2E p95"
+        }
+      ]
+    }
+
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["vllm", "llm", "embedding"],
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "vLLM — LLM & Embedding Monitor",
+  "uid": "vllm-booking-dashboard",
+  "version": 1
+}

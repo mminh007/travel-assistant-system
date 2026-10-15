@@ -5,12 +5,10 @@
 MODEL="${VLLM_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-4B}"
 echo "[vLLM] Starting Embedding — Model: $MODEL"
 vllm serve "$MODEL" \
-  --host 0.0.0.0 --port 8001 \
+  --host 0.0.0.0 --port 8081 \
   --task embedding \
   --dtype bfloat16 \
   --max-model-len 8192 \
   --gpu-memory-utilization 0.90 \
   --max-num-seqs 128 \
-  --disable-log-requests \
-  --uvicorn-log-level warning \
   --served-model-name "$(basename $MODEL)"
