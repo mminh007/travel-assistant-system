@@ -1,11 +1,11 @@
 # 🚀 vLLM Deployment Guide on vast.ai
 
-> **Goal:** Run 2 vLLM models on a single GPU RTX 3090 (24GB VRAM) on vast.ai, connecting with the locally running Booking Agent System.
+> **Goal:** Run 2 vLLM models concurrently on a single GPU RTX 3090 (24GB VRAM) on vast.ai with `--max-model-len 4096`, connecting with the locally running Booking Agent System + Prometheus/Grafana observability stack.
 >
-> | Model | Role | Internal Port | VRAM |
-> |-------|------|---------------|------|
-> | `Qwen/Qwen2.5-7B-Instruct-AWQ` | LLM (chat/reasoning) | 8080 | ~6.5 GB |
-> | `Qwen/Qwen3-Embedding-4B` | Embedding (2560 dims) | 8081 | ~8.5 GB |
+> | Model | Role | Internal Port | Context Len | `--gpu-memory-utilization` | Approx VRAM |
+> |-------|------|---------------|-------------|----------------------------|-------------|
+> | `Qwen/Qwen2.5-7B-Instruct-AWQ` | LLM (chat/reasoning) | 8080 | 4096 | `0.50` (~12.0 GB) | ~5.5 GB weights + ~6.5 GB KV cache |
+> | `Qwen/Qwen3-Embedding-4B` | Embedding (2560 dims) | 8081 | 4096 | `0.38` (~9.1 GB) | ~8.0 GB weights + ~1.1 GB buffer |
 
 ---
 
@@ -149,8 +149,11 @@ VLLM_EMBEDDING_BASE_URL=http://137.175.22.196:YYYYY/v1
 VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ
 VLLM_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
 VLLM_API_KEY=EMPTY
+VLLM_MAX_COMPLETION_TOKENS=1024
+VLLM_MAX_CONTEXT_TOKENS=4096
 
 # ── Prometheus scrape targets (host:port, no scheme) ──
+# NOTE: docker-compose automatically injects these into /tmp/prometheus.yml on container startup
 VLLM_METRICS_HOST=137.175.22.196:XXXXX
 VLLM_EMBEDDING_METRICS_HOST=137.175.22.196:YYYYY
 ```
@@ -188,11 +191,36 @@ curl http://137.175.22.196:YYYYY/v1/models
 # 3. Verify FastAPI agent health
 curl http://localhost:8080/health
 
-# 4. Access Grafana dashboard
+# 4. Access Grafana dashboards
 # → http://localhost:3001  (admin / admin)
+#   - Dashboard 1: "vLLM — LLM & Embedding Monitor (vast.ai)" (KV Cache %, Preemptions, TTFT, ITL/TPOT, Queue, Prefix Cache)
+#   - Dashboard 2: "Booking Agent — LangGraph & Hybrid RAG Monitor" (User TTFT, Node Latency, Token Governance, Semantic Cache, Qdrant RRF)
 
-# 5. Check Prometheus targets — verify vllm-llm and vllm-embedding are UP
+# 5. Check Prometheus targets — verify all 4 jobs (http-metrics, grpc-metrics, vllm-llm, vllm-embedding) are UP
 # → http://localhost:9090/targets
+```
+
+---
+
+## Step 10 — Run Capacity, KV Preemption & Load Benchmarks
+
+```bash
+# 1. Sanity check both vLLM endpoints (LLM + Embedding 2560 dims)
+VLLM_BASE_URL=http://137.175.22.196:XXXXX/v1 \
+VLLM_EMBEDDING_BASE_URL=http://137.175.22.196:YYYYY/v1 \
+  python -m serving.vllm.test_connection
+
+# 2. Run vLLM Capacity + Co-located Embedding Stress Test (concurrency 1 -> 32, tracks KV %, waiting queue, preemptions)
+VLLM_BASE_URL=http://137.175.22.196:XXXXX/v1 \
+VLLM_EMBEDDING_BASE_URL=http://137.175.22.196:YYYYY/v1 \
+BENCHMARK_SUITE=capacity \
+  python -m serving.vllm.benchmarks.run_all
+
+# 3. Run End-to-End Agent + RAG SSE Load Test via k6 (streams results into Prometheus & Grafana)
+docker compose --profile loadtest run --rm k6_load_test
+
+# 4. Run End-to-End Agent gRPC Streaming Load Test via k6
+K6_SCRIPT=grpc_stream_test.js docker compose --profile loadtest run --rm k6_load_test
 ```
 
 ---

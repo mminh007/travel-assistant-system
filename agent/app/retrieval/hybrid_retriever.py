@@ -1,8 +1,10 @@
+import time
 from typing import List, Dict
 from app.interfaces import Retriever
 from app.interfaces import VectorStore
 from app.interfaces import EmbeddingProvider
 from app.core.logger import setup_app_logger
+from app.core.metrics import RAG_RETRIEVAL_DURATION_SECONDS, RAG_RETRIEVED_DOCS
 
 logger = setup_app_logger("HybridRetriever")
 
@@ -20,6 +22,7 @@ class HybridRetriever(Retriever):
         Redefine retrieve_context:
         Orchestrates Hybrid Search (Dense + Sparse) natively via Qdrant.
         """
+        start_ts = time.perf_counter()
         try:
             filters = {"user_id": user_id}
             
@@ -44,6 +47,13 @@ class HybridRetriever(Retriever):
                         "metadata": hybrid_results["metadatas"][0][i]
                     })
 
+            elapsed = time.perf_counter() - start_ts
+            RAG_RETRIEVED_DOCS.labels(collection=collection).observe(len(final_top_k))
+            RAG_RETRIEVAL_DURATION_SECONDS.labels(
+                collection=collection,
+                status="hit" if final_top_k else "empty",
+            ).observe(elapsed)
+
             # ─── FORMAT OUTPUT RESULTS ───
             if final_top_k:
                 facts = [doc["text"] for doc in final_top_k]
@@ -55,6 +65,9 @@ class HybridRetriever(Retriever):
                 return f"Known context extracted out of dedicated partition [{collection.upper()}]:\n- {context}"
                 
         except Exception as e:
+            RAG_RETRIEVAL_DURATION_SECONDS.labels(collection=collection, status="error").observe(
+                time.perf_counter() - start_ts
+            )
             logger.error(f"❌ [Hybrid Retriever Error] Failed pipeline processing on box {collection}: {str(e)}\n")
         
         return ""

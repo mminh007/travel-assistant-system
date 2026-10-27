@@ -1,0 +1,383 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Booking LangGraph Multi-Agent & Hybrid RAG Observability — User TTFT, E2E Latency, Per-Node Latency, Token Governance, Semantic Cache, Qdrant RAG, Loop Safeguards",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100, "title": "Traffic, Active Streams & End-to-End SLA", "type": "row" },
+
+    {
+      "id": 1, "type": "stat",
+      "title": "Active SSE Streams (HTTP)",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 40 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(sse_active_streams) or vector(0)",
+          "legendFormat": "SSE Active"
+        }
+      ]
+    },
+
+    {
+      "id": 2, "type": "stat",
+      "title": "Active gRPC Streams",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 40 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(grpc_active_streams) or vector(0)",
+          "legendFormat": "gRPC Active"
+        }
+      ]
+    },
+
+    {
+      "id": 3, "type": "stat",
+      "title": "Semantic Cache Hit Rate (5m)",
+      "description": "Percentage of user prompts served directly from Qdrant Semantic Cache (bypasses full LangGraph execution).",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No traffic",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "yellow", "value": 0.15 },
+              { "color": "green", "value": 0.35 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(semantic_cache_requests_total{status=\"hit\"}[5m])) / (sum(rate(semantic_cache_requests_total[5m])) > 0)",
+          "legendFormat": "Cache Hit Rate"
+        }
+      ]
+    },
+
+    {
+      "id": 4, "type": "stat",
+      "title": "Agent Request Rate (req/s)",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(agent_requests_total[1m]))",
+          "legendFormat": "RPS"
+        }
+      ]
+    },
+
+    {
+      "id": 5, "type": "stat",
+      "title": "Truncated Node Outputs",
+      "description": "Total LLM calls that hit max_tokens (finish_reason=length). Increase NODE_MAX_TOKENS_* if > 0.",
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(agent_node_output_truncated_total) or vector(0)",
+          "legendFormat": "Truncations"
+        }
+      ]
+    },
+
+    {
+      "id": 6, "type": "stat",
+      "title": "Safeguard Forced Terminations",
+      "description": "Total times max_iterations, budget_depleted, duplicate_action, or max_rework_cycles tripped.",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(langgraph_forced_termination_total) or vector(0)",
+          "legendFormat": "Safeguards"
+        }
+      ]
+    },
+
+    {
+      "id": 10, "type": "timeseries",
+      "title": "User-Perceived Agent TTFT (p50 / p95 / p99)",
+      "description": "Time from HTTP/gRPC request arrival to the first streamed token chunk (includes Guardrail, Planner, ReAct, Tools, and Synthesizer prefill).",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(agent_time_to_first_token_seconds_bucket{cache_status=\"miss\"}[5m])))",
+          "legendFormat": "TTFT p50 (cache miss)"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_time_to_first_token_seconds_bucket{cache_status=\"miss\"}[5m])))",
+          "legendFormat": "TTFT p95 (cache miss)"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_time_to_first_token_seconds_bucket{cache_status=\"hit\"}[5m])))",
+          "legendFormat": "TTFT p95 (cache hit)"
+        }
+      ]
+    },
+
+    {
+      "id": 11, "type": "timeseries",
+      "title": "Agent End-to-End Request Duration (p50 / p95 / p99)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le, source) (rate(agent_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "E2E p50 ({{source}})"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, source) (rate(agent_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "E2E p95 ({{source}})"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le, source) (rate(agent_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "E2E p99 ({{source}})"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "id": 200, "title": "LangGraph Node Breakdown & Token Governance (max_context=4096)", "type": "row" },
+
+    {
+      "id": 20, "type": "timeseries",
+      "title": "Per-Node Execution Latency p95 (Bottleneck Finder)",
+      "description": "Identifies which LangGraph node dominates end-to-end latency.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, node_name) (rate(agent_node_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{node_name}} (p95)"
+        }
+      ]
+    },
+
+    {
+      "id": 21, "type": "timeseries",
+      "title": "LLM Inference Duration by Node (p95)",
+      "description": "Duration of invoke_llm_with_limit (includes concurrency semaphore wait + vLLM inference).",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, node_name, tier) (rate(agent_llm_call_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{node_name}} (tier {{tier}})"
+        }
+      ]
+    },
+
+    {
+      "id": 22, "type": "timeseries",
+      "title": "Per-Node Input Tokens p95 (Context Budget vs 4096 limit)",
+      "description": "Monitors prompt bloat per node against the 4096 context window.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, node_name) (rate(agent_node_input_tokens_bucket[5m])))",
+          "legendFormat": "{{node_name}} in"
+        }
+      ]
+    },
+
+    {
+      "id": 23, "type": "timeseries",
+      "title": "Per-Node Output Tokens p95 (Calibrate NODE_MAX_TOKENS_*)",
+      "description": "Compare against per-node max_tokens limits to avoid truncation or wasted KV reservation.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, node_name) (rate(agent_node_output_tokens_bucket[5m])))",
+          "legendFormat": "{{node_name}} out"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "id": 300, "title": "Hybrid RAG (Qdrant Dense + BM25 RRF), Embedding & Semantic Cache", "type": "row" },
+
+    {
+      "id": 30, "type": "timeseries",
+      "title": "RAG Hybrid Retrieval & Embedding Latency (p50 / p95)",
+      "description": "Compares vLLM Qwen3-Embedding-4B latency vs Qdrant Hybrid RRF query latency.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 29 },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_embedding_duration_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "Embedding p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, collection) (rate(agent_rag_retrieval_duration_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "Qdrant RRF p95 ({{collection}})"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(semantic_cache_duration_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "Semantic Cache {{operation}} p95"
+        }
+      ]
+    },
+
+    {
+      "id": 31, "type": "timeseries",
+      "title": "Tool Execution Latency p95 & Duplicate Tool Blocks",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 29 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, tool_name) (rate(agent_tool_call_duration_seconds_bucket[5m])))",
+          "legendFormat": "Tool {{tool_name}} p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (tool_name) (rate(langgraph_duplicate_tool_call_total[5m]))",
+          "legendFormat": "Duplicate Blocked: {{tool_name}}"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 400, "title": "Complexity Routing, ReAct Loops & Safeguards", "type": "row" },
+
+    {
+      "id": 40, "type": "timeseries",
+      "title": "Request Rate by Complexity & Intent Category",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 37 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (complexity, intent_category) (rate(agent_request_complexity_total[5m]))",
+          "legendFormat": "{{complexity}} / {{intent_category}}"
+        }
+      ]
+    },
+
+    {
+      "id": 41, "type": "timeseries",
+      "title": "ReAct Iterations, Tool Calls & Rework Cycles (p95 by Complexity)",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 37 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 } } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, complexity) (rate(agent_iterations_by_complexity_bucket[5m])))",
+          "legendFormat": "Iterations p95 ({{complexity}})"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, complexity) (rate(agent_tool_calls_by_complexity_bucket[5m])))",
+          "legendFormat": "Tool Calls p95 ({{complexity}})"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, complexity) (rate(agent_rework_cycles_by_complexity_bucket[5m])))",
+          "legendFormat": "Rework p95 ({{complexity}})"
+        }
+      ]
+    }
+
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["agent", "langgraph", "rag", "qdrant", "booking"],
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Booking Agent — LangGraph & Hybrid RAG Monitor",
+  "uid": "agent-langgraph-rag-dashboard",
+  "version": 1
+}

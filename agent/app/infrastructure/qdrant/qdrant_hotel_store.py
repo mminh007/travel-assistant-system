@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 from typing import Optional
 from qdrant_client import QdrantClient
@@ -11,6 +12,7 @@ from qdrant_client.models import (
 )
 from app.core.logger import setup_app_logger
 from app.core.settings import settings
+from app.core.metrics import RAG_RETRIEVAL_DURATION_SECONDS, RAG_RETRIEVED_DOCS
 from fastembed import SparseTextEmbedding
 
 logger = setup_app_logger("QdrantHotelStore")
@@ -40,12 +42,13 @@ class QdrantHotelStore:
         return settings.qdrant.hotels_collection_name
 
     def _ensure_hotel_collection(self, dense_dim: int):
-        """Creates hotels_collection with appropriate indexes for the Hotel domain."""
-        if self.client.collection_exists(settings.qdrant.hotels_collection_name):
+        """Creates active hotels collection with appropriate indexes for the Hotel domain."""
+        col = self.collection_name
+        if self.client.collection_exists(col):
             return
 
         self.client.create_collection(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             vectors_config={
                 "text-dense": VectorParams(
                     size=dense_dim,
@@ -67,29 +70,29 @@ class QdrantHotelStore:
 
         # ─── Hotel-specific Payload Indexes ───
         self.client.create_payload_index(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             field_name="city",
             field_schema=PayloadSchemaType.KEYWORD
         )
         self.client.create_payload_index(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             field_name="star_rating",
             field_schema=PayloadSchemaType.INTEGER
         )
         self.client.create_payload_index(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             field_name="min_price",
             field_schema=PayloadSchemaType.FLOAT
         )
         # GEO index - required for GeoRadius filter
         self.client.create_payload_index(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             field_name="location",
             field_schema=PayloadSchemaType.GEO
         )
         # Full-text index for semantic BM25 sparse search
         self.client.create_payload_index(
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             field_name="document",
             field_schema=TextIndexParams(
                 type="text",
@@ -100,10 +103,11 @@ class QdrantHotelStore:
             )
         )
 
-        logger.info(f"==> [HotelStore] Created '{settings.qdrant.hotels_collection_name}' with Hotel indexes: city, star_rating, min_price, location (GEO).")
+        logger.info(f"==> [HotelStore] Created '{col}' with Hotel indexes: city, star_rating, min_price, location (GEO).")
 
     async def upsert_hotel(self, hotel_id: str, document: str, dense_embedding: list[float], metadata: dict):
         """Upserts a hotel point into Qdrant. Uses hotel_id (Guid) as original_id."""
+        col = self.collection_name
         await asyncio.to_thread(self._ensure_hotel_collection, len(dense_embedding))
 
         sparse_list = list(self.sparse_model.embed([document]))
@@ -129,22 +133,23 @@ class QdrantHotelStore:
 
         await asyncio.to_thread(
             self.client.upsert,
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             points=[point]
         )
-        logger.info(f"==> [HotelStore] Upserted hotel {hotel_id}.")
+        logger.info(f"==> [HotelStore] Upserted hotel {hotel_id} into {col}.")
 
     async def delete_hotel(self, hotel_id: str):
         """Deletes hotel from Qdrant by hotel_id."""
+        col = self.collection_name
         delete_filter = Filter(must=[
             FieldCondition(key="hotel_id", match=MatchValue(value=hotel_id))
         ])
         await asyncio.to_thread(
             self.client.delete,
-            collection_name=settings.qdrant.hotels_collection_name,
+            collection_name=col,
             points_selector=delete_filter
         )
-        logger.info(f"==> [HotelStore] Deleted hotel {hotel_id}.")
+        logger.info(f"==> [HotelStore] Deleted hotel {hotel_id} from {col}.")
 
     async def hybrid_search_hotels(
         self,
@@ -160,55 +165,73 @@ class QdrantHotelStore:
         Supports hard pre-filtering by city, star_rating, max_price.
         No user_id filtering as hotels_collection is shared data.
         """
-        exists = await asyncio.to_thread(self.client.collection_exists, settings.qdrant.hotels_collection_name)
-        if not exists:
-            return []
+        col = self.collection_name
+        start_ts = time.perf_counter()
+        try:
+            exists = await asyncio.to_thread(self.client.collection_exists, col)
+            if not exists:
+                RAG_RETRIEVED_DOCS.labels(collection=col).observe(0)
+                RAG_RETRIEVAL_DURATION_SECONDS.labels(collection=col, status="empty").observe(
+                    time.perf_counter() - start_ts
+                )
+                return []
 
-        # ─── Build Pre-filter ───
-        conditions = []
-        if city:
-            conditions.append(FieldCondition(key="city", match=MatchValue(value=city)))
-        if min_stars:
-            conditions.append(FieldCondition(key="star_rating", range=Range(gte=min_stars)))
-        if max_price:
-            conditions.append(FieldCondition(key="min_price", range=Range(lte=max_price)))
+            # ─── Build Pre-filter ───
+            conditions = []
+            if city:
+                conditions.append(FieldCondition(key="city", match=MatchValue(value=city)))
+            if min_stars:
+                conditions.append(FieldCondition(key="star_rating", range=Range(gte=min_stars)))
+            if max_price:
+                conditions.append(FieldCondition(key="min_price", range=Range(lte=max_price)))
 
-        qdrant_filter = Filter(must=conditions) if conditions else None
+            qdrant_filter = Filter(must=conditions) if conditions else None
 
-        # ─── Sparse Vector ───
-        sparse_list = list(self.sparse_model.embed([query_text]))
-        sparse = sparse_list[0]
-        query_sparse = SparseVector(
-            indices=sparse.indices.tolist(),
-            values=sparse.values.tolist()
-        )
+            # ─── Sparse Vector ───
+            sparse_list = list(self.sparse_model.embed([query_text]))
+            sparse = sparse_list[0]
+            query_sparse = SparseVector(
+                indices=sparse.indices.tolist(),
+                values=sparse.values.tolist()
+            )
 
-        prefetch = [
-            Prefetch(query=query_sparse, using="text-sparse", limit=top_k * 2),
-            Prefetch(query=dense_embedding, using="text-dense", limit=top_k * 2),
-        ]
+            prefetch = [
+                Prefetch(query=query_sparse, using="text-sparse", limit=top_k * 2),
+                Prefetch(query=dense_embedding, using="text-dense", limit=top_k * 2),
+            ]
 
-        results = await asyncio.to_thread(
-            self.client.query_points,
-            collection_name=settings.qdrant.hotels_collection_name,
-            prefetch=prefetch,
-            query=FusionQuery(fusion=Fusion.RRF),
-            query_filter=qdrant_filter,
-            limit=top_k
-        )
+            results = await asyncio.to_thread(
+                self.client.query_points,
+                collection_name=col,
+                prefetch=prefetch,
+                query=FusionQuery(fusion=Fusion.RRF),
+                query_filter=qdrant_filter,
+                limit=top_k
+            )
 
-        hotels = []
-        for p in results.points:
-            hotels.append({
-                "hotel_id": p.payload.get("hotel_id"),
-                "document": p.payload.get("document", ""),
-                "name": p.payload.get("name"),
-                "city": p.payload.get("city"),
-                "star_rating": p.payload.get("star_rating"),
-                "min_price": p.payload.get("min_price"),
-                "amenities": p.payload.get("amenities", []),
-                "score": p.score
-            })
+            hotels = []
+            for p in results.points:
+                hotels.append({
+                    "hotel_id": p.payload.get("hotel_id"),
+                    "document": p.payload.get("document", ""),
+                    "name": p.payload.get("name"),
+                    "city": p.payload.get("city"),
+                    "star_rating": p.payload.get("star_rating"),
+                    "min_price": p.payload.get("min_price"),
+                    "amenities": p.payload.get("amenities", []),
+                    "score": p.score
+                })
 
-        logger.info(f"==> [HotelStore] Found {len(hotels)} hotels for query: '{query_text}'")
-        return hotels
+            elapsed = time.perf_counter() - start_ts
+            RAG_RETRIEVED_DOCS.labels(collection=col).observe(len(hotels))
+            RAG_RETRIEVAL_DURATION_SECONDS.labels(
+                collection=col,
+                status="hit" if hotels else "empty",
+            ).observe(elapsed)
+            logger.info(f"==> [HotelStore] Found {len(hotels)} hotels in '{col}' for query: '{query_text}'")
+            return hotels
+        except Exception:
+            RAG_RETRIEVAL_DURATION_SECONDS.labels(collection=col, status="error").observe(
+                time.perf_counter() - start_ts
+            )
+            raise

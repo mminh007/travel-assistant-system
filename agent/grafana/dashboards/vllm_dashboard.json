@@ -5,7 +5,7 @@
     { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
   ],
   "annotations": { "list": [] },
-  "description": "vLLM LLM & Embedding server metrics — KV cache, throughput, latency, queue depth",
+  "description": "vLLM LLM (Qwen2.5-7B-Instruct-AWQ, port 8080) & Embedding (Qwen3-Embedding-4B, port 8081) on vast.ai — KV cache, preemptions, TTFT/ITL/TPOT, queue depth, prefix cache, speculative decoding",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -14,12 +14,12 @@
   "panels": [
 
     { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
-      "id": 100, "title": "🖥️  LLM Server (port 8000)", "type": "row" },
+      "id": 100, "title": "LLM Server — Qwen/Qwen2.5-7B-Instruct-AWQ (port 8080, max_len=4096)", "type": "row" },
 
     {
       "id": 1, "type": "gauge",
       "title": "KV Cache Usage %",
-      "description": "Percentage of KV cache slots currently occupied. Above 90 % → OOM risk.",
+      "description": "Percentage of GPU KV cache blocks currently occupied. Above 90 % -> preemption / queue risk.",
       "gridPos": { "h": 6, "w": 4, "x": 0, "y": 1 },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"] },
@@ -40,8 +40,8 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} * 100",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} or vllm:gpu_cache_usage_perc{instance=\"vllm-llm\"}) * 100",
           "legendFormat": "KV Cache"
         }
       ]
@@ -49,13 +49,14 @@
 
     {
       "id": 2, "type": "stat",
-      "title": "Prefix Cache Hit Rate",
-      "description": "Ratio of prompt tokens served from prefix cache. Higher = fewer recomputes.",
+      "title": "Prefix Cache Hit Rate (5m)",
+      "description": "Ratio of prompt tokens served from prefix cache over the last 5 minutes.",
       "gridPos": { "h": 6, "w": 4, "x": 4, "y": 1 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
+          "noValue": "Idle",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -68,8 +69,8 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "rate(vllm:prefix_cache_hits_total{instance=\"vllm-llm\"}[1m]) / clamp_min(rate(vllm:prefix_cache_queries_total{instance=\"vllm-llm\"}[1m]), 1)",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:prefix_cache_hits_total{instance=\"vllm-llm\"}[5m])) / (sum(rate(vllm:prefix_cache_queries_total{instance=\"vllm-llm\"}[5m])) > 0)",
           "legendFormat": "Hit Rate"
         }
       ]
@@ -78,7 +79,7 @@
     {
       "id": 3, "type": "stat",
       "title": "Running Requests",
-      "description": "Requests currently being decoded (in-flight).",
+      "description": "Requests currently being decoded in-flight (max-num-seqs=64).",
       "gridPos": { "h": 6, "w": 4, "x": 8, "y": 1 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
@@ -96,8 +97,8 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_requests_running{instance=\"vllm-llm\"}",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_requests_running{instance=\"vllm-llm\"})",
           "legendFormat": "Running"
         }
       ]
@@ -106,7 +107,7 @@
     {
       "id": 4, "type": "stat",
       "title": "Waiting Requests (Queue)",
-      "description": "Requests queued waiting for a free slot. Persistent > 0 means GPU saturated.",
+      "description": "Requests queued waiting for KV cache blocks or max_num_seqs slot. Persistent > 0 means GPU saturated.",
       "gridPos": { "h": 6, "w": 4, "x": 12, "y": 1 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
@@ -116,16 +117,16 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 10 }
             ]
           }
         }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_requests_waiting{instance=\"vllm-llm\"}",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_requests_waiting{instance=\"vllm-llm\"})",
           "legendFormat": "Waiting"
         }
       ]
@@ -133,30 +134,55 @@
 
     {
       "id": 5, "type": "stat",
-      "title": "GPU Cache Blocks Free",
-      "description": "Number of free GPU KV cache blocks remaining.",
+      "title": "KV Preemptions (Total)",
+      "description": "Cumulative requests evicted from KV cache due to memory pressure. Any increase under load signals KV cache exhaustion.",
       "gridPos": { "h": 6, "w": 4, "x": 16, "y": 1 },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_gpu_blocks_free{instance=\"vllm-llm\"}",
-          "legendFormat": "Free Blocks"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_preemptions_total{instance=\"vllm-llm\"}) or vector(0)",
+          "legendFormat": "Preemptions"
         }
       ]
     },
 
     {
       "id": 6, "type": "stat",
-      "title": "Avg Generation Throughput",
+      "title": "Generation Throughput (tok/s)",
+      "description": "System-wide output token generation throughput.",
       "gridPos": { "h": 6, "w": 4, "x": 20, "y": 1 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 50 }
+            ]
+          }
+        }
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m]))",
           "legendFormat": "tok/s"
         }
       ]
@@ -164,7 +190,7 @@
 
     {
       "id": 10, "type": "timeseries",
-      "title": "KV Cache Usage Over Time",
+      "title": "KV Cache Usage % & Preemption Rate",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100,
@@ -172,16 +198,21 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} * 100",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(vllm:kv_cache_usage_perc{instance=\"vllm-llm\"} or vllm:gpu_cache_usage_perc{instance=\"vllm-llm\"}) * 100",
           "legendFormat": "KV Cache %"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:num_preemptions_total{instance=\"vllm-llm\"}[1m])) * 100",
+          "legendFormat": "Preemptions/s (x100)"
         }
       ]
     },
 
     {
       "id": 11, "type": "timeseries",
-      "title": "Request Queue Depth",
+      "title": "Request Queue Depth (Running vs Waiting)",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
       "fieldConfig": {
         "defaults": { "unit": "short",
@@ -189,14 +220,14 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_requests_running{instance=\"vllm-llm\"}",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_requests_running{instance=\"vllm-llm\"})",
           "legendFormat": "Running"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_requests_waiting{instance=\"vllm-llm\"}",
-          "legendFormat": "Waiting"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_requests_waiting{instance=\"vllm-llm\"})",
+          "legendFormat": "Waiting (Queue)"
         }
       ]
     },
@@ -204,7 +235,7 @@
     {
       "id": 12, "type": "timeseries",
       "title": "TTFT — Time To First Token (p50 / p95 / p99)",
-      "description": "Latency until first token is generated. Dominated by prefill compute.",
+      "description": "Prefill + queue latency before the first output token is emitted.",
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
       "fieldConfig": {
         "defaults": { "unit": "ms",
@@ -212,18 +243,18 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
           "legendFormat": "TTFT p50"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
           "legendFormat": "TTFT p95"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.99, rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
           "legendFormat": "TTFT p99"
         }
       ]
@@ -231,8 +262,8 @@
 
     {
       "id": 13, "type": "timeseries",
-      "title": "TPOT — Time Per Output Token (p50 / p95)",
-      "description": "Decode latency per token. Bandwidth-bound; higher = decode congestion.",
+      "title": "ITL / TPOT — Inter-Token Latency (p50 / p95 / p99)",
+      "description": "Decode latency per output token (vLLM V1 inter_token_latency_seconds or legacy time_per_output_token_seconds).",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
       "fieldConfig": {
         "defaults": { "unit": "ms",
@@ -240,53 +271,122 @@
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.50, rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
-          "legendFormat": "TPOT p50"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:inter_token_latency_seconds_bucket{instance=\"vllm-llm\"}[1m]) or rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "ITL/TPOT p50"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.95, rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m])) * 1000",
-          "legendFormat": "TPOT p95"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:inter_token_latency_seconds_bucket{instance=\"vllm-llm\"}[1m]) or rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "ITL/TPOT p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(vllm:inter_token_latency_seconds_bucket{instance=\"vllm-llm\"}[1m]) or rate(vllm:time_per_output_token_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "ITL/TPOT p99"
         }
       ]
     },
 
     {
       "id": 14, "type": "timeseries",
-      "title": "Token Throughput (Prompt + Generation)",
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 21 },
+      "title": "Token Throughput (Prompt Prefill vs Generation Decode)",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 21 },
       "fieldConfig": {
         "defaults": { "unit": "short",
           "custom": { "lineWidth": 2, "fillOpacity": 8 } }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "rate(vllm:prompt_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:prompt_tokens_total{instance=\"vllm-llm\"}[1m]))",
           "legendFormat": "Prompt tok/s"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m])",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:generation_tokens_total{instance=\"vllm-llm\"}[1m]))",
           "legendFormat": "Generation tok/s"
         }
       ]
     },
 
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
-      "id": 200, "title": "🔢  Embedding Server (port 8001)", "type": "row" },
+    {
+      "id": 15, "type": "timeseries",
+      "title": "LLM E2E Latency & Scheduler Queue Time (p50 / p95)",
+      "description": "End-to-end request latency vs time spent waiting in scheduler queue.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 21 },
+      "fieldConfig": {
+        "defaults": { "unit": "ms",
+          "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "E2E p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "E2E p95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_queue_time_seconds_bucket{instance=\"vllm-llm\"}[1m]))) * 1000",
+          "legendFormat": "Queue Wait p95"
+        }
+      ]
+    },
+
+    {
+      "id": 16, "type": "timeseries",
+      "title": "Request Completion Rate by finish_reason (stop vs length)",
+      "description": "High finish_reason=length indicates max_tokens truncation.",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 28 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps",
+          "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (finished_reason) (rate(vllm:request_success_total{instance=\"vllm-llm\"}[1m]))",
+          "legendFormat": "{{finished_reason}}"
+        }
+      ]
+    },
+
+    {
+      "id": 17, "type": "timeseries",
+      "title": "Speculative Decoding Acceptance Rate",
+      "description": "Ratio of accepted draft tokens to total draft tokens (active when speculative decoding is enabled).",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 28 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1,
+          "custom": { "lineWidth": 2 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:spec_decode_num_accepted_tokens_total{instance=\"vllm-llm\"}[1m])) / (sum(rate(vllm:spec_decode_num_draft_tokens_total{instance=\"vllm-llm\"}[1m])) > 0)",
+          "legendFormat": "Draft Acceptance Rate"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "id": 200, "title": "Embedding Server — Qwen/Qwen3-Embedding-4B (port 8081, 2560 dims, max_len=4096)", "type": "row" },
 
     {
       "id": 20, "type": "stat",
       "title": "Embedding — Running Requests",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 29 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 35 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": { "defaults": { "unit": "short" } },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "vllm:num_requests_running{instance=\"vllm-embedding\"}",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(vllm:num_requests_running{instance=\"vllm-embedding\"})",
           "legendFormat": "Running"
         }
       ]
@@ -295,13 +395,13 @@
     {
       "id": 21, "type": "stat",
       "title": "Embedding — Throughput (tok/s)",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 29 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 35 },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "short" } },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "rate(vllm:prompt_tokens_total{instance=\"vllm-embedding\"}[1m])",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(vllm:prompt_tokens_total{instance=\"vllm-embedding\"}[1m]))",
           "legendFormat": "Embed tok/s"
         }
       ]
@@ -310,30 +410,30 @@
     {
       "id": 22, "type": "timeseries",
       "title": "Embedding — E2E Latency (p50 / p95)",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 29 },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 35 },
       "fieldConfig": { "defaults": { "unit": "ms" } },
       "targets": [
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.50, rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m])) * 1000",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m]))) * 1000",
           "legendFormat": "E2E p50"
         },
         {
-          "datasource": { "type": "prometheus" },
-          "expr": "histogram_quantile(0.95, rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m])) * 1000",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket{instance=\"vllm-embedding\"}[1m]))) * 1000",
           "legendFormat": "E2E p95"
         }
       ]
     }
 
   ],
-  "refresh": "10s",
+  "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["vllm", "llm", "embedding"],
+  "tags": ["vllm", "llm", "embedding", "vastai"],
   "time": { "from": "now-30m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "vLLM — LLM & Embedding Monitor",
+  "title": "vLLM — LLM & Embedding Monitor (vast.ai)",
   "uid": "vllm-booking-dashboard",
-  "version": 1
+  "version": 2
 }

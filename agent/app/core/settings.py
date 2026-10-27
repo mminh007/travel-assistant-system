@@ -48,12 +48,12 @@ class VllmSettings(BaseSettings):
     """
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VLLM_", extra="ignore")
 
-    # ─── PROCESS 1: LLM Server (port 8000) ───
-    # vast.ai endpoint: http://<hash>.vast.ai:8000/v1
-    base_url: str = "http://localhost:8000/v1"
+    # ─── PROCESS 1: LLM Server (port 8080) ───
+    # vast.ai endpoint: http://<host>:<mapped_port>/v1
+    base_url: str = "http://localhost:8080/v1"
 
     # Must match --served-model-name when launching vLLM
-    model: str = "Qwen/Qwen2.5-7B-Instruct"
+    model: str = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 
     # vLLM doesn't require a real API key
     api_key: SecretStr = SecretStr("EMPTY")
@@ -68,11 +68,11 @@ class VllmSettings(BaseSettings):
 
     # Must match --max-model-len of the vLLM instance
     max_completion_tokens: int = 1024
-    max_context_tokens: int = 8192
+    max_context_tokens: int = 4096
 
-    # ─── PROCESS 2: Embedding Server (port 8001) ───
-    # vast.ai endpoint: http://<hash>.vast.ai:8001/v1
-    embedding_base_url: str = "http://localhost:8001/v1"
+    # ─── PROCESS 2: Embedding Server (port 8081) ───
+    # vast.ai endpoint: http://<host>:<mapped_port>/v1
+    embedding_base_url: str = "http://localhost:8081/v1"
 
     # Must match --served-model-name of the embedding vLLM process
     # Qwen3-Embedding-4B outputs 2560 dims; chosen for quality over 0.6B (1024 dims)

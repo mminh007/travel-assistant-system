@@ -8,6 +8,7 @@ from app.graph.schemas import InputGuardrailOutput
 from app.graph.utils import update_token_usage, load_agent_manifest_instructions
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
+from app.core.metrics import COMPLEXITY_DISTRIBUTION
 
 logger = setup_app_logger("CognitiveNodes")
 
@@ -30,6 +31,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
         logger.info(f"    Objective: {decision.objective}\n")
 
         if not decision.is_in_domain:
+            COMPLEXITY_DISTRIBUTION.labels(complexity="low", intent_category="out_of_domain").inc()
             return {
                 "is_in_domain": False,
                 "intent_category": "out_of_domain",
@@ -39,6 +41,10 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
                 **update_token_usage(state, usage, node_name="input_guardrail")
             }
 
+        COMPLEXITY_DISTRIBUTION.labels(
+            complexity=decision.complexity or "medium",
+            intent_category=decision.intent_category or "travel_faq",
+        ).inc()
         return {
             "is_in_domain": decision.is_in_domain,
             "intent_category": decision.intent_category,

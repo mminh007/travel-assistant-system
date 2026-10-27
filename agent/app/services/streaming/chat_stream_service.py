@@ -14,6 +14,13 @@ from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.bootstrap.container import container
 from app.graph.workflow import agent_graph
 from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
+from app.core.metrics import (
+    AGENT_REQUESTS_TOTAL,
+    AGENT_REQUEST_DURATION_SECONDS,
+    AGENT_TTFT_SECONDS,
+    NODE_DURATION_SECONDS,
+    TOOL_CALL_DURATION_SECONDS,
+)
 
 logger_instance = logger.setup_app_logger("ChatStreamService")
 
@@ -45,10 +52,16 @@ class ChatStreamService:
         is_cancelled_callback=None,
         source: str = "http",
     ) -> AsyncIterator[Tuple[str, Any]]:
+        req_start_ts = time.perf_counter()
+        first_chunk_recorded = False
         # Semantic cache
         try:
             cached_reply = await container.semantic_cache.get(prompt)
             if cached_reply:
+                elapsed = time.perf_counter() - req_start_ts
+                AGENT_TTFT_SECONDS.labels(source=source, cache_status="hit").observe(elapsed)
+                AGENT_REQUEST_DURATION_SECONDS.labels(source=source, status="cache_hit").observe(elapsed)
+                AGENT_REQUESTS_TOTAL.labels(source=source, status="cache_hit").inc()
                 yield "chunk", cached_reply
                 return
         except Exception as cache_err:
@@ -95,28 +108,75 @@ class ChatStreamService:
         final_state_messages = []
         ai_full_response_text = ""
         resolved_domain = initial_state["current_domain"]
+        stream_status = "completed"
+        node_starts: dict[str, float] = {}
+        tool_starts: dict[str, Tuple[str, float]] = {}
+
+        _TRACKED_NODES = {
+            "input_guardrail",
+            "out_of_domain",
+            "travel_react_agent",
+            "planner",
+            "direct_executor_init",
+            "evaluator_agent",
+            "task_manager",
+            "finding_extractor",
+            "fact_checker",
+            "final_synthesizer",
+            "support_agent",
+            "clarification_agent",
+            "action_tracker",
+            "tools",
+        }
 
         async def run_graph_stream(graph_instance):
-            nonlocal ai_full_response_text, final_state_messages, resolved_domain
+            nonlocal ai_full_response_text, final_state_messages, resolved_domain, first_chunk_recorded, stream_status
             async for event in graph_instance.astream_events(initial_state, version="v2", config=trace_config):
                 if is_cancelled_callback and is_cancelled_callback():
+                    stream_status = "cancelled"
                     logger_instance.info("==> [StreamService] Stream dropped by upstream.")
                     break
                 
                 kind = event["event"]
+                run_id = event.get("run_id", "")
+                name = event.get("name", "")
+
+                if kind == "on_chain_start" and name in _TRACKED_NODES:
+                    node_starts[run_id] = time.perf_counter()
+                elif kind == "on_chain_end" and name in _TRACKED_NODES and run_id in node_starts:
+                    NODE_DURATION_SECONDS.labels(node_name=name).observe(
+                        time.perf_counter() - node_starts.pop(run_id)
+                    )
+                elif kind == "on_tool_start":
+                    tool_starts[run_id] = (name or "unknown", time.perf_counter())
+                elif kind == "on_tool_end" and run_id in tool_starts:
+                    t_name, t_start = tool_starts.pop(run_id)
+                    TOOL_CALL_DURATION_SECONDS.labels(tool_name=t_name, status="ok").observe(
+                        time.perf_counter() - t_start
+                    )
+                elif kind == "on_tool_error" and run_id in tool_starts:
+                    t_name, t_start = tool_starts.pop(run_id)
+                    TOOL_CALL_DURATION_SECONDS.labels(tool_name=t_name, status="error").observe(
+                        time.perf_counter() - t_start
+                    )
                 
                 if kind == "on_chat_model_stream":
                     current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node not in ["final_synthesizer", "out_of_domain"]:
+                    if current_node not in ["final_synthesizer", "out_of_domain", "support_agent", "clarification_agent"]:
                         continue
                     content = event["data"]["chunk"].content
                     if content and isinstance(content, str):
+                        if not first_chunk_recorded:
+                            first_chunk_recorded = True
+                            AGENT_TTFT_SECONDS.labels(source=source, cache_status="miss").observe(
+                                time.perf_counter() - req_start_ts
+                            )
                         ai_full_response_text += content
                         yield "chunk", content
                         
                 elif kind == "on_chat_model_end":
                     current_node = event.get("metadata", {}).get("langgraph_node", "")
-                    if current_node in ["final_synthesizer", "out_of_domain"]:
+                    if current_node in ["final_synthesizer", "out_of_domain", "support_agent", "clarification_agent"]:
                         output = event.get("data", {}).get("output")
                         if output and hasattr(output, "response_metadata"):
                             finish_reason = output.response_metadata.get("finish_reason")
@@ -131,6 +191,11 @@ class ChatStreamService:
                     if not ai_full_response_text and final_state_messages:
                         last_msg = final_state_messages[-1]
                         if getattr(last_msg, "type", "") == "ai" and last_msg.content and isinstance(last_msg.content, str):
+                            if not first_chunk_recorded:
+                                first_chunk_recorded = True
+                                AGENT_TTFT_SECONDS.labels(source=source, cache_status="miss").observe(
+                                    time.perf_counter() - req_start_ts
+                                )
                             ai_full_response_text += last_msg.content
                             yield "chunk", last_msg.content
 
@@ -160,8 +225,12 @@ class ChatStreamService:
                 yield "receipt", receipt
 
         except Exception as e:
+            stream_status = "error"
             logger_instance.error(f"==> [StreamService] Runtime exception: {str(e)}")
             yield "error", str(e)
         finally:
+            total_elapsed = time.perf_counter() - req_start_ts
+            AGENT_REQUEST_DURATION_SECONDS.labels(source=source, status=stream_status).observe(total_elapsed)
+            AGENT_REQUESTS_TOTAL.labels(source=source, status=stream_status).inc()
             if langfuse_handler:
                 langfuse_handler.flush()

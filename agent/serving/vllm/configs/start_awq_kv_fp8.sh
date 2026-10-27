@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# Phase 2.4 — AWQ + FP8 KV Cache + Chunked Prefill + Prefix Caching
-# Best-effort config: maximises KV cache budget + throughput on a single GPU
+# Phase 2.4 — Production vast.ai Config: AWQ + Prefix Caching + Chunked Prefill
+# Co-located on 1x RTX 3090 (24GB VRAM) alongside Qwen3-Embedding-4B (0.38 VRAM).
+# NOTE: On RTX 3090 (Ampere, SM86), KV cache dtype defaults to 'auto' (FP16) because native
+# FP8 KV cache requires Ada/Hopper (SM89+). Override with KV_CACHE_DTYPE=fp8 on L4/4090/H100.
+set -euo pipefail
 MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
-echo "[vLLM] Starting LLM — Model: $MODEL"
+PORT="${VLLM_PORT:-8080}"
+KV_DTYPE="${KV_CACHE_DTYPE:-auto}"
+GPU_UTIL="${VLLM_GPU_UTIL:-0.50}"
+echo "[vLLM] Starting Production LLM — Model: $MODEL | port=$PORT | max-len=4096 | gpu-util=$GPU_UTIL | kv-dtype=$KV_DTYPE"
 vllm serve "$MODEL" \
-  --host 0.0.0.0 --port 8080 \
+  --host 0.0.0.0 \
+  --port "$PORT" \
   --dtype float16 \
   --quantization awq_marlin \
-  --kv-cache-dtype fp8 \
-  --max-model-len 8192 \
-  --gpu-memory-utilization 0.90 \
+  --kv-cache-dtype "$KV_DTYPE" \
+  --max-model-len 4096 \
+  --gpu-memory-utilization "$GPU_UTIL" \
   --enable-chunked-prefill \
   --max-num-batched-tokens 512 \
   --enable-prefix-caching \
   --max-num-seqs 64 \
-  --served-model-name "$(basename $MODEL)"
+  --served-model-name "$MODEL" "$(basename "$MODEL")"

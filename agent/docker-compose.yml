@@ -68,9 +68,14 @@ services:
       - QDRANT_SERVER_HOST=qdrant_server
       - QDRANT_SERVER_PORT=6333
       - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
-      - VLLM_MODEL=${VLLM_MODEL:-Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8080/v1}
+      - VLLM_EMBEDDING_BASE_URL=${VLLM_EMBEDDING_BASE_URL:-http://host.docker.internal:8081/v1}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_EMBEDDING_MODEL=${VLLM_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-4B}
       - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
+      - VLLM_MAX_CONTEXT_TOKENS=${VLLM_MAX_CONTEXT_TOKENS:-4096}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     depends_on:
@@ -101,9 +106,14 @@ services:
       - QDRANT_SERVER_HOST=qdrant_server
       - QDRANT_SERVER_PORT=6333
       - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://localhost:8000/v1}
-      - VLLM_MODEL=${VLLM_MODEL:-Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8080/v1}
+      - VLLM_EMBEDDING_BASE_URL=${VLLM_EMBEDDING_BASE_URL:-http://host.docker.internal:8081/v1}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_EMBEDDING_MODEL=${VLLM_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-4B}
       - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
+      - VLLM_MAX_CONTEXT_TOKENS=${VLLM_MAX_CONTEXT_TOKENS:-4096}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     depends_on:
@@ -145,18 +155,27 @@ services:
   prometheus:
     #  http://localhost:9090
     image: prom/prometheus:v2.51.0
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--web.enable-remote-write-receiver'
-      - '--enable-feature=native-histograms'
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sed -e "s|__VLLM_METRICS_HOST__|$$VLLM_METRICS_HOST|g" \
+            -e "s|__VLLM_EMBEDDING_METRICS_HOST__|$$VLLM_EMBEDDING_METRICS_HOST|g" \
+            /etc/prometheus/prometheus.yml > /tmp/prometheus.yml && \
+        exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yml \
+          --web.enable-remote-write-receiver \
+          --enable-feature=native-histograms
     container_name: booking_prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     environment:
       # Override these with actual vast.ai host:port when running remotely
-      # e.g. VLLM_METRICS_HOST=abc123.vast.ai:8000
-      - VLLM_METRICS_HOST=${VLLM_METRICS_HOST:-host.docker.internal:8000}
-      - VLLM_EMBEDDING_METRICS_HOST=${VLLM_EMBEDDING_METRICS_HOST:-host.docker.internal:8001}
+      # e.g. VLLM_METRICS_HOST=137.175.22.196:8080
+      - VLLM_METRICS_HOST=${VLLM_METRICS_HOST:-host.docker.internal:8080}
+      - VLLM_EMBEDDING_METRICS_HOST=${VLLM_EMBEDDING_METRICS_HOST:-host.docker.internal:8081}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "9090:9090" # Prometheus
     restart: always
@@ -182,10 +201,12 @@ services:
     networks:
       - agent_network
 
-  # 🚀 INTEGRATION: K6 LOAD TESTING ENGINE
+  # 🚀 INTEGRATION: K6 LOAD TESTING ENGINE (run on-demand: docker compose --profile loadtest run --rm k6_load_test)
   k6_load_test:
     image: grafana/k6:latest
     container_name: booking_k6_runner
+    profiles:
+      - loadtest
     networks:
       - agent_network
     volumes:
@@ -193,12 +214,13 @@ services:
     environment:
       # Configure k6 to push metrics to Prometheus using Remote Write
       - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
-
       # Export Trend metrics as native Prometheus histograms
       - K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true
+      - AGENT_HTTP_URL=http://agent_api:8080
+      - AGENT_GRPC_HOST=agent_grpc:50051
 
-    # Change the JavaScript file name according to the test scenario you want to run
-    command: run -o experimental-prometheus-rw /load_tests/${K6_SCRIPT}
+    # Change K6_SCRIPT via env (defaults to http_stream_test.js)
+    command: run -o experimental-prometheus-rw /load_tests/${K6_SCRIPT:-http_stream_test.js}
 
     depends_on:
       agent_api:

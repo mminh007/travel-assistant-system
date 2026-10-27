@@ -1,9 +1,11 @@
 import hashlib
 import asyncio
+import time
 from app.interfaces.ISemantic_cache import SemanticCache
 from app.interfaces.IVector_store import VectorStore
 from app.interfaces.IEmbedding_provider import EmbeddingProvider
 from app.core.logger import setup_app_logger
+from app.core.metrics import SEMANTIC_CACHE_LOOKUPS, SEMANTIC_CACHE_DURATION_SECONDS
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 logger = setup_app_logger("QdrantSemanticCache")
@@ -103,53 +105,75 @@ class QdrantSemanticCache(SemanticCache):
           → lightweight rerank (semantic + lexical)
           → return best candidate's cached response, or None on MISS
         """
-        embedding = await self.embedding_provider.embed(query)
+        start_ts = time.perf_counter()
+        try:
+            embedding = await self.embedding_provider.embed(query)
 
-        # ─── VERSIONING FILTER: Only consider entries from the current LLM version ───
-        # When the LLM upgrades (model_version changes), this filter causes all old
-        # cache entries to be invisibly bypassed → MISS → fresh LLM call → stored as new version.
-        version_filter = Filter(
-            must=[FieldCondition(key="model_version", match=MatchValue(value=self.model_version))]
-        )
-
-        exists = await asyncio.to_thread(
-            self.vector_store.client.collection_exists, self.collection
-        )
-        if not exists:
-            return None
-
-        # ─── STEP 1: Qdrant ANN search with DB-level pre-filtering ───
-        # score_threshold is enforced at the Qdrant engine level (Rust), not in Python.
-        # This means bad candidates never cross the network boundary.
-        candidates = await asyncio.to_thread(
-            self.vector_store.client.search,
-            collection_name=self.collection,
-            query_vector=("text-dense", embedding),
-            limit=self.top_k,
-            with_payload=True,
-            query_filter=version_filter,
-            score_threshold=self.threshold,
-        )
-
-        if not candidates:
-            logger.info(
-                f"==> [SemanticCache] MISS | threshold={self.threshold} | "
-                f"version={self.model_version} | top_k={self.top_k}"
+            # ─── VERSIONING FILTER: Only consider entries from the current LLM version ───
+            # When the LLM upgrades (model_version changes), this filter causes all old
+            # cache entries to be invisibly bypassed → MISS → fresh LLM call → stored as new version.
+            version_filter = Filter(
+                must=[FieldCondition(key="model_version", match=MatchValue(value=self.model_version))]
             )
-            return None
 
-        # ─── STEP 2: Lightweight hybrid rerank ───
-        # At this point, all candidates already have score ≥ threshold (guaranteed by Qdrant).
-        # Reranking only reorders them; it does NOT invalidate the threshold guarantee.
-        reranked = self._rerank(query, candidates)
-        best_score, best = reranked[0]
+            exists = await asyncio.to_thread(
+                self.vector_store.client.collection_exists, self.collection
+            )
+            if not exists:
+                SEMANTIC_CACHE_LOOKUPS.labels(status="miss").inc()
+                SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="get", status="miss").observe(
+                    time.perf_counter() - start_ts
+                )
+                return None
 
-        logger.info(
-            f"==> [SemanticCache] HIT | "
-            f"semantic={best.score:.4f} | reranked={best_score:.4f} | "
-            f"version={self.model_version} | evaluated={len(candidates)}/{self.top_k}"
-        )
-        return best.payload.get("document") or None
+            # ─── STEP 1: Qdrant ANN search with DB-level pre-filtering ───
+            # score_threshold is enforced at the Qdrant engine level (Rust), not in Python.
+            # This means bad candidates never cross the network boundary.
+            candidates = await asyncio.to_thread(
+                self.vector_store.client.search,
+                collection_name=self.collection,
+                query_vector=("text-dense", embedding),
+                limit=self.top_k,
+                with_payload=True,
+                query_filter=version_filter,
+                score_threshold=self.threshold,
+            )
+
+            if not candidates:
+                SEMANTIC_CACHE_LOOKUPS.labels(status="miss").inc()
+                SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="get", status="miss").observe(
+                    time.perf_counter() - start_ts
+                )
+                logger.info(
+                    f"==> [SemanticCache] MISS | threshold={self.threshold} | "
+                    f"version={self.model_version} | top_k={self.top_k}"
+                )
+                return None
+
+            # ─── STEP 2: Lightweight hybrid rerank ───
+            # At this point, all candidates already have score ≥ threshold (guaranteed by Qdrant).
+            # Reranking only reorders them; it does NOT invalidate the threshold guarantee.
+            reranked = self._rerank(query, candidates)
+            best_score, best = reranked[0]
+
+            doc = best.payload.get("document") or None
+            status = "hit" if doc else "miss"
+            SEMANTIC_CACHE_LOOKUPS.labels(status=status).inc()
+            SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="get", status=status).observe(
+                time.perf_counter() - start_ts
+            )
+            logger.info(
+                f"==> [SemanticCache] HIT | "
+                f"semantic={best.score:.4f} | reranked={best_score:.4f} | "
+                f"version={self.model_version} | evaluated={len(candidates)}/{self.top_k}"
+            )
+            return doc
+        except Exception:
+            SEMANTIC_CACHE_LOOKUPS.labels(status="error").inc()
+            SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="get", status="error").observe(
+                time.perf_counter() - start_ts
+            )
+            raise
 
     async def set(self, query: str, response: str) -> None:
         """
@@ -158,22 +182,32 @@ class QdrantSemanticCache(SemanticCache):
         The doc_id is hashed from (model_version + query) so that the same question
         answered by different LLM versions can coexist in the collection without collision.
         """
-        embedding = await self.embedding_provider.embed(query)
+        start_ts = time.perf_counter()
+        try:
+            embedding = await self.embedding_provider.embed(query)
 
-        # Include model_version in the hash → different LLM versions get different doc_ids.
-        # This means upgrading the LLM doesn't overwrite old cached answers;
-        # it creates a new entry under a new ID, preserving history.
-        doc_id = hashlib.sha256(
-            f"{self.model_version}:{query}".encode("utf-8")
-        ).hexdigest()
+            # Include model_version in the hash → different LLM versions get different doc_ids.
+            # This means upgrading the LLM doesn't overwrite old cached answers;
+            # it creates a new entry under a new ID, preserving history.
+            doc_id = hashlib.sha256(
+                f"{self.model_version}:{query}".encode("utf-8")
+            ).hexdigest()
 
-        await self.vector_store.add(
-            collection_name=self.collection,
-            ids=[doc_id],
-            embeddings=[embedding],
-            documents=[response],
-            metadatas=[{
-                "query": query,
-                "model_version": self.model_version,
-            }],
-        )
+            await self.vector_store.add(
+                collection_name=self.collection,
+                ids=[doc_id],
+                embeddings=[embedding],
+                documents=[response],
+                metadatas=[{
+                    "query": query,
+                    "model_version": self.model_version,
+                }],
+            )
+            SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="set", status="ok").observe(
+                time.perf_counter() - start_ts
+            )
+        except Exception:
+            SEMANTIC_CACHE_DURATION_SECONDS.labels(operation="set", status="error").observe(
+                time.perf_counter() - start_ts
+            )
+            raise

@@ -11,7 +11,12 @@ from app.core.logger import setup_app_logger
 from app.core.concurrency import get_semaphore
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import httpx
-from app.core.metrics import NODE_TRUNCATION_TOTAL
+import time
+from app.core.metrics import (
+    NODE_TRUNCATION_TOTAL,
+    LLM_CALL_DURATION_SECONDS,
+    LLM_CALL_ERRORS_TOTAL,
+)
 
 logger = setup_app_logger("GraphConfig")
 
@@ -216,14 +221,24 @@ async def invoke_llm_with_limit(
     Executes an LLM call subject to rate limits (retry on 429) and concurrency limits.
     Returns a tuple of (response, TokenUsage).
     """
+    tier_str = str(tier)
+    start_ts = time.perf_counter()
     sem = get_semaphore(tier)
     async with sem:
         invoke_kwargs = {}
         if max_tokens_override is not None:
             invoke_kwargs["max_tokens"] = max_tokens_override
 
-        response = await llm.ainvoke(messages, config, **invoke_kwargs)
-        
+        try:
+            response = await llm.ainvoke(messages, config, **invoke_kwargs)
+        except Exception as exc:
+            elapsed = time.perf_counter() - start_ts
+            LLM_CALL_DURATION_SECONDS.labels(node_name=node_name, tier=tier_str, status="error").observe(elapsed)
+            LLM_CALL_ERRORS_TOTAL.labels(node_name=node_name, tier=tier_str, error_type=type(exc).__name__).inc()
+            raise
+
+        elapsed = time.perf_counter() - start_ts
+
         # ─── DETECT TRUNCATION (finish_reason = "length") ───
         finish_reason = None
         if hasattr(response, "response_metadata"):
@@ -232,8 +247,15 @@ async def invoke_llm_with_limit(
                 or response.response_metadata.get("stop_reason")  # Anthropic uses "stop_reason"
             )
 
-        if finish_reason in ("length", "max_tokens"):
-            NODE_TRUNCATION_TOTAL.labels(node_name=node_name, tier=str(tier)).inc()
+        is_truncated = finish_reason in ("length", "max_tokens")
+        LLM_CALL_DURATION_SECONDS.labels(
+            node_name=node_name,
+            tier=tier_str,
+            status="truncated" if is_truncated else "ok",
+        ).observe(elapsed)
+
+        if is_truncated:
+            NODE_TRUNCATION_TOTAL.labels(node_name=node_name, tier=tier_str).inc()
             logger.warning(
                 f"⚠️ [TRUNCATION] node={node_name} | tier={tier} | "
                 f"finish_reason={finish_reason} | "

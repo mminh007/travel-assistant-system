@@ -3,7 +3,13 @@ import functools
 import tiktoken
 from app.graph.state import AgentState
 from app.core.logger import setup_app_logger
-from app.core.metrics import NODE_INPUT_TOKENS, NODE_OUTPUT_TOKENS
+from app.core.metrics import (
+    NODE_INPUT_TOKENS,
+    NODE_OUTPUT_TOKENS,
+    TOKEN_USAGE_COUNTER,
+    ESTIMATED_COST_GAUGE,
+    COST_PER_TIER_HISTOGRAM,
+)
 from app.core.cost_model import get_token_cost
 from app.core.settings import settings
 
@@ -32,6 +38,13 @@ def update_token_usage(state: AgentState, usage, node_name: str = "unknown") -> 
     # ─── PROMETHEUS METRICS ───
     NODE_INPUT_TOKENS.labels(node_name=node_name, tier=tier_str).observe(usage.input_tokens)
     NODE_OUTPUT_TOKENS.labels(node_name=node_name, tier=tier_str).observe(usage.output_tokens)
+    if usage.input_tokens > 0:
+        TOKEN_USAGE_COUNTER.labels(tier=tier_str, token_type="input").inc(usage.input_tokens)
+    if usage.output_tokens > 0:
+        TOKEN_USAGE_COUNTER.labels(tier=tier_str, token_type="output").inc(usage.output_tokens)
+    if cost > 0:
+        ESTIMATED_COST_GAUGE.observe(cost)
+        COST_PER_TIER_HISTOGRAM.labels(tier=tier_str).observe(cost)
 
     # ─── STRUCTURED LOG (TOKEN_AUDIT) ───
     # Fixed format so the analyzer script can parse it

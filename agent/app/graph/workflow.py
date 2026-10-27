@@ -171,6 +171,7 @@ async def action_tracker_node(state: AgentState):
 def route_from_evaluator(state: AgentState) -> str:
     if state.get("needs_rework"):
         if state.get("rework_count", 0) >= MAX_REWORK_CYCLES:
+            FORCED_TERMINATION_TOTAL.labels(domain="travel_react_agent", reason="max_rework_cycles").inc()
             return "task_manager"
         return "travel_react_agent"
     return "task_manager"

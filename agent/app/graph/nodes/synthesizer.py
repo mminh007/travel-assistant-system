@@ -5,7 +5,12 @@ from langchain_core.runnables import RunnableConfig
 from app.graph.state import AgentState
 from app.graph.config import get_llm_instance, invoke_llm_with_limit
 from app.graph.utils import update_token_usage
-from app.core.metrics import GRAPH_ITERATIONS
+from app.core.metrics import (
+    GRAPH_ITERATIONS,
+    ITERATIONS_BY_COMPLEXITY,
+    TOOL_CALLS_BY_COMPLEXITY,
+    REWORK_CYCLES_BY_COMPLEXITY,
+)
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
 
@@ -66,7 +71,11 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
         final_response.content = content
 
     total_iterations = state.get("iteration_count", 0)
+    complexity = state.get("complexity") or "medium"
     GRAPH_ITERATIONS.labels(domain=state.get("current_domain", "general_memory")).observe(total_iterations)
+    ITERATIONS_BY_COMPLEXITY.labels(complexity=complexity).observe(total_iterations)
+    TOOL_CALLS_BY_COMPLEXITY.labels(complexity=complexity).observe(state.get("tool_call_count", 0))
+    REWORK_CYCLES_BY_COMPLEXITY.labels(complexity=complexity).observe(state.get("rework_count", 0))
 
     logger.info("    Process Complete. Handshake ready.\n\n")
 

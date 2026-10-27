@@ -17,6 +17,7 @@ from app.graph.utils import (
 )
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
+from app.core.metrics import SOFT_STOP_TRIGGER_TOTAL
 
 logger = setup_app_logger("CognitiveNodes")
 
@@ -160,6 +161,7 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     current_iteration = state.get("iteration_count", 0) + 1
 
     if current_iteration > 1:
+        SOFT_STOP_TRIGGER_TOTAL.labels(node_name="travel_react_agent", reason="low_iterations").inc()
         compiled_messages.append(SystemMessage(content=COMPACT_AGENT_REMINDER))
 
     response, usage = await invoke_llm_with_limit(2, llm_with_tools, compiled_messages, config, max_tokens_override=settings.node_limits.travel_react_agent, node_name="travel_react_agent")

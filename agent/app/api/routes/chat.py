@@ -33,16 +33,6 @@ async def chat_stream_endpoint(
 ):
     if request.user_id != authenticated_user_id:
         raise HTTPException(status_code=403, detail="Forbidden: user_id mismatch")
-    # Check semantic cache inside Vector DB to bypass LLM if hit
-    cached_reply = await container.semantic_cache.get(request.prompt)
-    if cached_reply:
-        async def cached_generator():
-            yield f"data: {cached_reply}\n\n"
-        return StreamingResponse(cached_generator(), media_type="text/event-stream")
-    
-    # 🚀 OPTIMIZATION 1: Pass session_id and user_id directly to Langfuse
-    # Moved to ChatStreamService
-
 
     SSE_ACTIVE_STREAMS.inc()
 

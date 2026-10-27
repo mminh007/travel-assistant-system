@@ -24,20 +24,10 @@ from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.core.helpers.crypto_helper import encrypt_value, decrypt_value
 from app.services.streaming.chat_stream_service import ChatStreamService
 
-from prometheus_client import Gauge, Counter
 from prometheus_client import start_http_server
+from app.core.metrics import GRPC_ACTIVE_STREAMS, GRPC_ERRORS_TOTAL
 
 logger = setup_app_logger("GrpcServerCore")
-
-GRPC_ACTIVE_STREAMS = Gauge(
-    'grpc_active_streams', 
-    'Number of concurrent active gRPC chat streams currently processing'
-)
-
-GRPC_ERRORS_TOTAL = Counter(
-    'grpc_errors_total', 
-    'Total number of gRPC runtime pipeline exceptions caught'
-)
 
 class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
     def __init__(self):
@@ -60,19 +50,8 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
                     break
 
         logger.info(f"==> [gRPC] Received request from User: {request.user_id}, Session: {request.session_id}, CorrelationId: {correlation_id}")
-        
-        # 🚀 OPTIMIZATION: Check semantic cache inside Vector DB to bypass LLM if hit
-        try:
-            cached_reply = await container.semantic_cache.get(request.prompt)
-        except Exception as cache_err:
-            logger.warning(f"==> [gRPC] Semantic cache lookup failed, treating as MISS: {cache_err}")
-            cached_reply = None
-        if cached_reply:
-            logger.info(f"==> [gRPC] Cache hit for User: {request.user_id}")
-            yield chat_pb2.ChatResponse(chunk=cached_reply)
-            return
-        
-        # 🚀 METRIC: Increment active stream gauge
+
+        # 🚀 METRIC: Increment active stream gauge (semantic cache lookup is handled in ChatStreamService.stream)
         GRPC_ACTIVE_STREAMS.inc()
 
         try:

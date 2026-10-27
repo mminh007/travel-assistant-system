@@ -1,32 +1,53 @@
 global:
   scrape_interval: 5s
+  evaluation_interval: 5s
 
 scrape_configs:
+  # ── Agent FastAPI HTTP & SSE Server (port 8080 inside container) ──
   - job_name: "http-metrics"
-    static_configs:
-      - targets: ["agent_api_server:8000"]
-
-  - job_name: "grpc-metrics"
-    static_configs:
-      - targets: ["agent_grpc_server:8001"]
-
-  # ── vLLM LLM server (running externally on vast.ai or localhost) ──
-  # VLLM_METRICS_HOST is injected via docker-compose environment
-  - job_name: "vllm-llm"
-    scrape_interval: 10s
-    static_configs:
-      - targets: ["${VLLM_METRICS_HOST:-host.docker.internal:8000}"]
+    scrape_interval: 5s
     metrics_path: /metrics
+    static_configs:
+      - targets: ["agent_api:8080"]
+        labels:
+          service: "agent-http"
+    relabel_configs:
+      - target_label: instance
+        replacement: "agent-http"
+
+  # ── Agent gRPC Streaming Server (metrics exporter on port 8001 inside container) ──
+  - job_name: "grpc-metrics"
+    scrape_interval: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["agent_grpc:8001"]
+        labels:
+          service: "agent-grpc"
+    relabel_configs:
+      - target_label: instance
+        replacement: "agent-grpc"
+
+  # ── vLLM LLM Server (running on vast.ai or host) ──
+  # VLLM_METRICS_HOST is rendered by docker-compose entrypoint before Prometheus starts
+  - job_name: "vllm-llm"
+    scrape_interval: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["__VLLM_METRICS_HOST__"]
+        labels:
+          service: "vllm-llm"
     relabel_configs:
       - target_label: instance
         replacement: "vllm-llm"
 
-  # ── vLLM Embedding server ──
+  # ── vLLM Embedding Server (running on vast.ai or host) ──
   - job_name: "vllm-embedding"
-    scrape_interval: 10s
-    static_configs:
-      - targets: ["${VLLM_EMBEDDING_METRICS_HOST:-host.docker.internal:8001}"]
+    scrape_interval: 5s
     metrics_path: /metrics
+    static_configs:
+      - targets: ["__VLLM_EMBEDDING_METRICS_HOST__"]
+        labels:
+          service: "vllm-embedding"
     relabel_configs:
       - target_label: instance
         replacement: "vllm-embedding"
