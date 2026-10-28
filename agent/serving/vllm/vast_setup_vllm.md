@@ -155,7 +155,11 @@ curl http://localhost:10100/v1/models
 Run inside your vast.ai SSH terminal:
 
 ```bash
+# 1. Check Port Mappings
 env | grep -iE "port|mapping|portal|host|vast"
+
+# 2. Get Portal Authentication Token (required for API and Browser)
+echo $OPEN_BUTTON_TOKEN
 ```
 
 Look for lines in the format `VAST_TCP_PORT_<INTERNAL>=<EXTERNAL>`:
@@ -165,6 +169,13 @@ VAST_TCP_PORT_8000=40439   → Portal proxies 8000 to internal 18000 (LLM extern
 VAST_TCP_PORT_10100=40132  → Embedding external port
 VAST_TCP_PORT_22=40002     → SSH port
 ```
+
+> 🔐 **Vast.ai Instance Portal Authentication:**
+> Vast.ai protects proxied ports (such as 8000) behind a Caddy reverse proxy for security:
+> - **For API calls / cURL / code**: Pass header `Authorization: Bearer <OPEN_BUTTON_TOKEN>` (or configure `VLLM_API_KEY` & `VLLM_EMBEDDING_API_KEY` in your `.env` file).
+> - **When accessing directly via Browser** (e.g., viewing `/metrics` or `/docs`): Log in via HTTP Basic Auth with:
+>   - **Username**: `vastai`
+>   - **Password**: Value of `$OPEN_BUTTON_TOKEN`
 
 ### Method 2: Check on vast.ai Dashboard
 
@@ -191,9 +202,12 @@ VLLM_BASE_URL=http://<SSH_HOST>:40439/v1
 VLLM_EMBEDDING_BASE_URL=http://<SSH_HOST>:40132/v1
 VLLM_MODEL=Qwen/Qwen2.5-3B-Instruct-AWQ
 VLLM_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
-VLLM_API_KEY=EMPTY
+
+# ── Vast.ai Portal Token (obtained from: echo $OPEN_BUTTON_TOKEN) ──
+VLLM_API_KEY=<OPEN_BUTTON_TOKEN>
+VLLM_EMBEDDING_API_KEY=<OPEN_BUTTON_TOKEN>
 VLLM_MAX_COMPLETION_TOKENS=1024
-VLLM_MAX_CONTEXT_TOKENS=8192
+VLLM_MAX_CONTEXT_TOKENS=4096
 
 # ── Prometheus scrape targets (host:port, without http:// scheme) ──
 VLLM_METRICS_HOST=<SSH_HOST>:40439
@@ -224,11 +238,11 @@ docker compose logs -f agent_api
 ## Step 9 — Verify Entire System
 
 ```bash
-# 1. Verify vLLM LLM server from local machine
-curl http://<SSH_HOST>:40439/v1/models
+# 1. Verify vLLM LLM server from local machine (pass Bearer token)
+curl -H "Authorization: Bearer <OPEN_BUTTON_TOKEN>" http://<SSH_HOST>:40439/v1/models
 
-# 2. Verify vLLM Embedding server from local machine
-curl http://<SSH_HOST>:40132/v1/models
+# 2. Verify vLLM Embedding server from local machine (pass Bearer token)
+curl -H "Authorization: Bearer <OPEN_BUTTON_TOKEN>" http://<SSH_HOST>:40132/v1/models
 
 # 3. Verify FastAPI agent health
 curl http://localhost:8080/health
