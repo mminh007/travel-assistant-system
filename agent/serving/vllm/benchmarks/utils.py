@@ -23,7 +23,7 @@ RESULTS_DIR.mkdir(exist_ok=True)
 
 DEFAULT_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8080/v1")
 DEFAULT_EMBEDDING_BASE_URL = os.environ.get("VLLM_EMBEDDING_BASE_URL", "http://localhost:8081/v1")
-DEFAULT_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct-AWQ")
+DEFAULT_MODEL = os.environ.get("VLLM_MODEL", "Qwen/Qwen2.5-3B-Instruct-AWQ")
 DEFAULT_EMBEDDING_MODEL = os.environ.get("VLLM_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-4B")
 MAX_MODEL_LEN = int(os.environ.get("VLLM_MAX_CONTEXT_TOKENS", "4096"))
 

@@ -2,7 +2,7 @@
 # Phase 2.3 — AWQ + Chunked Prefill (reduces ITL/TPOT spike during concurrent long prompts)
 # Sweep CHUNK_SIZE=512 vs CHUNK_SIZE=4096 to benchmark chunked vs unchunked prefill
 set -euo pipefail
-MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
+MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}"
 PORT="${VLLM_PORT:-8080}"
 CHUNK_SIZE="${CHUNK_SIZE:-512}"
 echo "[vLLM] Starting AWQ + Chunked Prefill (max-num-batched-tokens=$CHUNK_SIZE) — Model: $MODEL on port $PORT"

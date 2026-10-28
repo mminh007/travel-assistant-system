@@ -70,7 +70,7 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8080/v1}
       - VLLM_EMBEDDING_BASE_URL=${VLLM_EMBEDDING_BASE_URL:-http://host.docker.internal:8081/v1}
-      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}
       - VLLM_EMBEDDING_MODEL=${VLLM_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-4B}
       - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
       - VLLM_MAX_CONTEXT_TOKENS=${VLLM_MAX_CONTEXT_TOKENS:-4096}
@@ -108,7 +108,7 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
       - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8080/v1}
       - VLLM_EMBEDDING_BASE_URL=${VLLM_EMBEDDING_BASE_URL:-http://host.docker.internal:8081/v1}
-      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}
       - VLLM_EMBEDDING_MODEL=${VLLM_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-4B}
       - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
       - VLLM_MAX_CONTEXT_TOKENS=${VLLM_MAX_CONTEXT_TOKENS:-4096}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 2.1 — AWQ INT4 Quantization (prefix cache disabled for pure quantization A/B)
 set -euo pipefail
-MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
+MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}"
 PORT="${VLLM_PORT:-8080}"
 echo "[vLLM] Starting AWQ-INT4 — Model: $MODEL on port $PORT"
 vllm serve "$MODEL" \

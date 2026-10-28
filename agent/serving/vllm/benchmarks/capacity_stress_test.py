@@ -2,7 +2,7 @@
 Phase 3 — System Capacity, KV Cache Saturation & Co-located Embedding Stress Test
 
 Designed for the vast.ai deployment running BOTH models on a single GPU (--max-model-len 4096):
-  1. LLM:       Qwen/Qwen2.5-7B-Instruct-AWQ (port 8080, gpu-memory-utilization=0.50)
+  1. LLM:       Qwen/Qwen2.5-3B-Instruct-AWQ (port 8080, gpu-memory-utilization=0.50)
   2. Embedding: Qwen/Qwen3-Embedding-4B      (port 8081, gpu-memory-utilization=0.38)
 
 What this benchmark measures:

@@ -4,7 +4,7 @@ Master benchmark runner — executes vLLM & Embedding benchmark suites.
 Usage:
   VLLM_BASE_URL=http://<vast-ip>:<port>/v1 \
   VLLM_EMBEDDING_BASE_URL=http://<vast-ip>:<embed-port>/v1 \
-  VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ \
+  VLLM_MODEL=Qwen/Qwen2.5-3B-Instruct-AWQ \
   VLLM_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B \
   BENCHMARK_SUITE=capacity \
     python -m serving.vllm.benchmarks.run_all

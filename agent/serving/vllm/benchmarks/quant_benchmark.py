@@ -1,5 +1,5 @@
 """
-Phase 2.1 — Quantization Benchmark: FP16 vs AWQ-INT4 (Qwen/Qwen2.5-7B-Instruct-AWQ)
+Phase 2.1 — Quantization Benchmark: FP16 vs AWQ-INT4 (Qwen/Qwen2.5-3B-Instruct-AWQ)
 
 Measures TTFT, TPOT, system throughput, and KV cache headroom under identical
 4096-context settings with salted prompts (no prefix cache bias) and fixed output length.

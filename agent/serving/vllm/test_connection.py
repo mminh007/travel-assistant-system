@@ -5,7 +5,7 @@ import sys
 
 base_url = os.environ.get("VLLM_BASE_URL", "http://localhost:8080/v1")
 embed_base_url = os.environ.get("VLLM_EMBEDDING_BASE_URL", "http://localhost:8081/v1")
-model = os.environ.get("VLLM_MODEL", "Qwen/Qwen2.5-7B-Instruct-AWQ")
+model = os.environ.get("VLLM_MODEL", "Qwen/Qwen2.5-3B-Instruct-AWQ")
 embed_model = os.environ.get("VLLM_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-4B")
 
 print(f"Testing LLM connection      : {base_url} (model={model})")

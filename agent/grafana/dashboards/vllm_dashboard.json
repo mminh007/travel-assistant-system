@@ -5,7 +5,7 @@
     { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
   ],
   "annotations": { "list": [] },
-  "description": "vLLM LLM (Qwen2.5-7B-Instruct-AWQ, port 8080) & Embedding (Qwen3-Embedding-4B, port 8081) on vast.ai — KV cache, preemptions, TTFT/ITL/TPOT, queue depth, prefix cache, speculative decoding",
+  "description": "vLLM LLM (Qwen2.5-3B-Instruct-AWQ, port 8080) & Embedding (Qwen3-Embedding-4B, port 8081) on vast.ai — KV cache, preemptions, TTFT/ITL/TPOT, queue depth, prefix cache, speculative decoding",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -14,7 +14,7 @@
   "panels": [
 
     { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
-      "id": 100, "title": "LLM Server — Qwen/Qwen2.5-7B-Instruct-AWQ (port 8080, max_len=4096)", "type": "row" },
+      "id": 100, "title": "LLM Server — Qwen/Qwen2.5-3B-Instruct-AWQ (port 8080, max_len=4096)", "type": "row" },
 
     {
       "id": 1, "type": "gauge",

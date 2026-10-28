@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 2.2 — AWQ + Automatic Prefix Caching
 set -euo pipefail
-MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
+MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-3B-Instruct-AWQ}"
 PORT="${VLLM_PORT:-8080}"
 echo "[vLLM] Starting AWQ + Prefix Cache — Model: $MODEL on port $PORT"
 vllm serve "$MODEL" \

@@ -53,7 +53,7 @@ class VllmSettings(BaseSettings):
     base_url: str = "http://localhost:8080/v1"
 
     # Must match --served-model-name when launching vLLM
-    model: str = "Qwen/Qwen2.5-7B-Instruct-AWQ"
+    model: str = "Qwen/Qwen2.5-3B-Instruct-AWQ"
 
     # vLLM doesn't require a real API key
     api_key: SecretStr = SecretStr("EMPTY")
@@ -168,7 +168,7 @@ class Settings(BaseSettings):
       - "nine_router" (default): OpenAI-compatible proxy routing through 9Router.
         Embedding: text-embedding-3-small (1536 dims) via nine_router.
       - "vllm": Self-hosted vLLM on vast.ai running TWO processes:
-          Process 1 — LLM inference (e.g. Qwen2.5-7B-Instruct) on port 8000
+          Process 1 — LLM inference (e.g. Qwen2.5-3B-Instruct-AWQ) on port 8000
           Process 2 — Embedding   (e.g. Qwen3-Embedding-4B, 2560 dims) on port 8001
         Both processes expose the OpenAI-compatible API.
         Qdrant uses dedicated collections (vllm_collection_name) to avoid

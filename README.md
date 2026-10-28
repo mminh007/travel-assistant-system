@@ -86,7 +86,7 @@ The system is composed of two independently deployable components:
 │  │  ┌─────────────────────┐  ┌──────────────────────┐   │   │
 │  │  │   9Router Proxy     │  │   vLLM Self-Hosted   │   │   │
 │  │  │   (port 20128)      │  │  (vast.ai / local)   │   │   │
-│  │  │  OpenAI · Gemini    │  │  Qwen2.5-7B-Instruct │   │   │
+│  │  │  OpenAI · Gemini    │  │  Qwen2.5-3B-Instruct │   │   │
 │  │  │  Claude · LLaMA     │  │  + Qwen3-Embedding   │   │   │
 │  │  │  DeepSeek           │  │                      │   │   │
 │  │  └─────────────────────┘  └──────────────────────┘   │   │
@@ -124,7 +124,7 @@ The system is composed of two independently deployable components:
 | Web Framework | FastAPI + Uvicorn |
 | AI Orchestration | LangGraph `StateGraph` |
 | **LLM Gateway** | **9Router** (managed multi-provider proxy, port 20128) |
-| **Self-Hosted LLM** | **vLLM** (Qwen2.5-7B-Instruct, AWQ/FP8 quantization) |
+| **Self-Hosted LLM** | **vLLM** (Qwen2.5-3B-Instruct, AWQ/FP8 quantization) |
 | Cloud LLM Providers | OpenAI · Anthropic Claude · Google Gemini · LLaMA · DeepSeek |
 | Embedding | `text-embedding-3-small` (9Router) · `Qwen3-Embedding-4B` (vLLM) |
 | Tool Protocol | MCP (Model Context Protocol) via `langchain-mcp-adapters` |
@@ -260,7 +260,7 @@ The agent engine supports two interchangeable LLM backends controlled by a singl
 
 | Process | Default Model | Port | Purpose |
 |---|---|---|---|
-| **LLM server** | `Qwen/Qwen2.5-7B-Instruct` | `8000` | Chat / reasoning inference |
+| **LLM server** | `Qwen/Qwen2.5-3B-Instruct-AWQ` | `8000` | Chat / reasoning inference |
 | **Embedding server** | `Qwen/Qwen3-Embedding-4B` (2560 dims) | `8001` | Vector embeddings for Qdrant |
 
 > ⚠️ **Port conflict note:** When using vLLM, the agent API server runs on **port 8080** (not 8000) to avoid colliding with the vLLM process.
@@ -283,7 +283,7 @@ LLM_PROVIDER=nine_router
 # Use vLLM self-hosted
 LLM_PROVIDER=vllm
 VLLM_BASE_URL=http://<host>:8000/v1
-VLLM_MODEL=Qwen2.5-7B-Instruct-AWQ
+VLLM_MODEL=Qwen2.5-3B-Instruct-AWQ
 ```
 
 Per-user provider overrides (with custom API keys) can also be submitted at runtime via `POST /config/provider`.
@@ -349,7 +349,7 @@ DEEPSEEK_API_KEY=...
 
 # ─── vLLM (only if LLM_PROVIDER=vllm) ──────────────────────
 VLLM_BASE_URL=http://localhost:8000/v1
-VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+VLLM_MODEL=Qwen/Qwen2.5-3B-Instruct-AWQ
 VLLM_API_KEY=EMPTY
 
 # ─── Web Search ─────────────────────────────────────────────
@@ -454,7 +454,7 @@ The website will be available at `https://localhost:5001` (or `http://localhost:
 
 ## 🌟 vLLM Serving Configurations
 
-The `agent/serving/vllm/configs/` directory contains six optimized launch scripts for different GPU and latency profiles. All scripts target `Qwen/Qwen2.5-7B-Instruct` (or AWQ variant) by default and can be overridden via environment variables.
+The `agent/serving/vllm/configs/` directory contains six optimized launch scripts for different GPU and latency profiles. All scripts target `Qwen/Qwen2.5-3B-Instruct-AWQ` by default and can be overridden via environment variables.
 
 | Script | Strategy | Use Case |
 |---|---|---|
@@ -469,14 +469,14 @@ The `agent/serving/vllm/configs/` directory contains six optimized launch script
 
 ```bash
 cd agent/serving/vllm
-VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ bash configs/start_awq_chunked.sh
+VLLM_MODEL=Qwen/Qwen2.5-3B-Instruct-AWQ bash configs/start_awq_chunked.sh
 ```
 
 **Speculative Decoding** uses a draft model to accelerate token generation:
 
 ```bash
-VLLM_MAIN_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ \
-VLLM_DRAFT_MODEL=Qwen/Qwen2.5-1.5B-Instruct \
+VLLM_MAIN_MODEL=Qwen/Qwen2.5-3B-Instruct-AWQ \
+VLLM_DRAFT_MODEL=Qwen/Qwen2.5-0.5B-Instruct-AWQ \
 SPEC_TOKENS=5 \
 bash configs/start_spec_decoding.sh
 ```
