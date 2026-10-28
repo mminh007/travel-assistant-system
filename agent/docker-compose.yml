@@ -1,5 +1,4 @@
 # docker-compose
-version: '3.8'
 name: booking-agent-system
 
 services:
@@ -161,6 +160,7 @@ services:
       - |
         sed -e "s|__VLLM_METRICS_HOST__|$$VLLM_METRICS_HOST|g" \
             -e "s|__VLLM_EMBEDDING_METRICS_HOST__|$$VLLM_EMBEDDING_METRICS_HOST|g" \
+            -e "s|__VLLM_API_KEY__|$$VLLM_API_KEY|g" \
             /etc/prometheus/prometheus.yml > /tmp/prometheus.yml && \
         exec /bin/prometheus \
           --config.file=/tmp/prometheus.yml \
@@ -174,6 +174,7 @@ services:
       # e.g. VLLM_METRICS_HOST=137.175.22.196:8080
       - VLLM_METRICS_HOST=${VLLM_METRICS_HOST:-host.docker.internal:8080}
       - VLLM_EMBEDDING_METRICS_HOST=${VLLM_EMBEDDING_METRICS_HOST:-host.docker.internal:8081}
+      - VLLM_API_KEY=${VLLM_API_KEY:-EMPTY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

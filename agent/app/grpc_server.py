@@ -14,7 +14,7 @@ import chat_pb2_grpc
 from langchain_core.messages import HumanMessage
 from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
 from app.core.logger import setup_app_logger
-from app.graph.workflow import agent_graph
+from app.graph import workflow
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from app.core.settings import settings
 from app.mcp.mcp_client import mcp_manager
@@ -31,7 +31,7 @@ logger = setup_app_logger("GrpcServerCore")
 
 class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
     def __init__(self):
-        self.graph = agent_graph
+        self.graph = workflow.agent_graph
         self._bg_tasks = set()
 
     async def StreamChat(self, request: chat_pb2.ChatRequest, context: grpc.aio.ServicerContext):

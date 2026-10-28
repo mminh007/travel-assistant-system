@@ -28,14 +28,16 @@ class UserOwnershipInterceptor(grpc.aio.ServerInterceptor):
         verified_user_id = None
         
         if x_user_id:
-            verified_user_id = x_user_id
-        elif auth_header and auth_header.lower().startswith("bearer "):
-            token = auth_header[7:]
-            jwt_secret = settings.mcp.jwt_secret.get_secret_value() if settings.mcp.jwt_secret else None
-            if jwt_secret:
-                payload = verify_jwt(token, jwt_secret)
-                if payload and "sub" in payload:
-                    verified_user_id = payload["sub"]
+            verified_user_id = x_user_id.decode("utf-8") if isinstance(x_user_id, bytes) else str(x_user_id)
+        elif auth_header:
+            auth_str = auth_header.decode("utf-8") if isinstance(auth_header, bytes) else str(auth_header)
+            if auth_str.lower().startswith("bearer "):
+                token = auth_str[7:]
+                jwt_secret = settings.mcp.jwt_secret.get_secret_value() if settings.mcp.jwt_secret else None
+                if jwt_secret:
+                    payload = verify_jwt(token, jwt_secret)
+                    if payload:
+                        verified_user_id = payload.get("sub") or payload.get("nameid") or payload.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")
 
         if not verified_user_id:
             handler = await continuation(handler_call_details)
@@ -56,9 +58,5 @@ class UserOwnershipInterceptor(grpc.aio.ServerInterceptor):
                     await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Missing or invalid authentication token")
                 return grpc.stream_stream_rpc_method_handler(reject_stream_stream)
             return handler
-
-        new_metadata = list(handler_call_details.invocation_metadata)
-        new_metadata.append(("x-verified-user-id", verified_user_id))
-        handler_call_details = handler_call_details._replace(invocation_metadata=tuple(new_metadata))
 
         return await continuation(handler_call_details)

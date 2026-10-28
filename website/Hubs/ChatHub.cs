@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Threading;
 using System;
 using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Booking.Web.Hubs
 {
@@ -23,7 +24,13 @@ namespace Booking.Web.Hubs
         {
             if (string.IsNullOrWhiteSpace(message)) return;
 
-            var userId = Context.UserIdentifier ?? "UnknownUser";
+            var userId = Context.UserIdentifier 
+                ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                ?? Context.User?.FindFirst("sub")?.Value 
+                ?? Context.User?.FindFirst("nameid")?.Value 
+                ?? Context.User?.Identity?.Name 
+                ?? "UnknownUser";
+
             // We use ConnectionId as the session for the chat
             var sessionId = Context.ConnectionId;
 
@@ -40,8 +47,15 @@ namespace Booking.Web.Hubs
 
             var headers = new Metadata
             {
-                { "x-correlation-id", correlationId }
+                { "x-correlation-id", correlationId },
+                { "x-user-id", userId }
             };
+
+            var token = httpContext?.Request.Cookies["jwtToken"];
+            if (!string.IsNullOrEmpty(token))
+            {
+                headers.Add("authorization", $"Bearer {token}");
+            }
 
             try
             {

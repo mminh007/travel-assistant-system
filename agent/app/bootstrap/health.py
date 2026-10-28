@@ -16,16 +16,22 @@ async def ping_llm_provider() -> None:
     """
     provider = settings.llm_provider
 
+    headers = {}
     if provider == "vllm":
         url = f"{settings.vllm.base_url.rstrip('/v1')}/health"
         label = f"vLLM @ {settings.vllm.base_url}"
+        api_key = settings.vllm.api_key.get_secret_value()
+        if api_key and api_key != "EMPTY":
+            headers["Authorization"] = f"Bearer {api_key}"
     else:
         url = f"{settings.nine_router.base_url.rstrip('/v1')}/health"
         label = f"9Router @ {settings.nine_router.base_url}"
+        if settings.nine_router.api_key:
+            headers["Authorization"] = f"Bearer {settings.nine_router.api_key.get_secret_value()}"
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(url)
+            r = await client.get(url, headers=headers)
             if r.status_code < 500:
                 logger.info(f"==> [HealthCheck] {label} — REACHABLE (HTTP {r.status_code})")
             else:

@@ -11,5 +11,7 @@ vllm serve "$MODEL" \
   --dtype float16 \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.50 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
   --no-enable-prefix-caching \
   --served-model-name "$MODEL" "$(basename "$MODEL")"

@@ -72,6 +72,8 @@ def _resolve_default_embedding(provider: str):
     """
     if provider == "vllm":
         api_key = settings.vllm.embedding_api_key.get_secret_value()
+        if (not api_key or api_key == "EMPTY") and settings.vllm.api_key:
+            api_key = settings.vllm.api_key.get_secret_value()
         model = settings.vllm.embedding_model
         logger.info(f"==> [Container] Using vLLM embedding model: {model} (via {settings.vllm.embedding_base_url})")
         return OpenAIEmbeddings(

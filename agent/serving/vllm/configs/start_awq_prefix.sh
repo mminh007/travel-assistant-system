@@ -12,4 +12,6 @@ vllm serve "$MODEL" \
   --enable-prefix-caching \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.50 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
   --served-model-name "$MODEL" "$(basename "$MODEL")"

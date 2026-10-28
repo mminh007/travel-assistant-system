@@ -7,6 +7,7 @@ from app.interfaces.IEmbedding_provider import EmbeddingProvider
 from app.core.logger import setup_app_logger
 from app.core.metrics import SEMANTIC_CACHE_LOOKUPS, SEMANTIC_CACHE_DURATION_SECONDS
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from app.core.settings import settings
 
 logger = setup_app_logger("QdrantSemanticCache")
 
@@ -50,7 +51,7 @@ class QdrantSemanticCache(SemanticCache):
         # alpha weights: semantic vs lexical in the rerank formula
         # Higher alpha → trust ANN scores more; lower alpha → trust keyword overlap more
         self.rerank_alpha = rerank_alpha
-        self.collection = "semantic_cache"
+        self.collection = "semantic_cache_vllm" if getattr(settings, "llm_provider", "") == "vllm" else "semantic_cache"
 
     # ─────────────────────────────────────────────────────────────────────────────
     # PRIVATE: Lightweight Hybrid Reranker

@@ -21,4 +21,6 @@ vllm serve "$MODEL" \
   --max-num-batched-tokens 512 \
   --enable-prefix-caching \
   --max-num-seqs 64 \
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes \
   --served-model-name "$MODEL" "$(basename "$MODEL")"

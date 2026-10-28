@@ -12,7 +12,7 @@ import app.core.logger as logger
 from app.core.settings import settings
 from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.bootstrap.container import container
-from app.graph.workflow import agent_graph
+from app.graph import workflow
 from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
 from app.core.metrics import (
     AGENT_REQUESTS_TOTAL,
@@ -26,8 +26,11 @@ logger_instance = logger.setup_app_logger("ChatStreamService")
 
 class ChatStreamService:
     def __init__(self, bg_tasks: Optional[set] = None):
-        self.graph = agent_graph
         self._bg_tasks = bg_tasks if bg_tasks is not None else set()
+
+    @property
+    def graph(self):
+        return workflow.agent_graph
 
     def generate_receipt(self, session_id: str, ai_full_response_text: str) -> dict:
         response_hash = hashlib.sha256(ai_full_response_text.encode('utf-8')).hexdigest()
