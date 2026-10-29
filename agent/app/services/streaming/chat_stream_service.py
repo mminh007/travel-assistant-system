@@ -86,6 +86,7 @@ class ChatStreamService:
         }
 
         trace_config = {
+            "recursion_limit": 100,  # Prevent GRAPH_RECURSION_LIMIT on multi-task ReAct plans
             "metadata": {
                 "session_id": session_id, 
                 "user_id": user_id,

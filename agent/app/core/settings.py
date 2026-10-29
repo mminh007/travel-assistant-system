@@ -149,7 +149,7 @@ class NodeTokenLimits(BaseSettings):
     planner_agent: int = 600
     travel_react_agent: int = 800
     finding_extractor: int = 400
-    fact_checker: int = 300
+    fact_checker: int = 1000  # Increased from 300 to 1000 to prevent JSON truncation
     evaluator_agent: int = 400
     final_synthesizer: int = 1000
     clarification_agent: int = 200
@@ -188,6 +188,7 @@ class Settings(BaseSettings):
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     node_limits: NodeTokenLimits = Field(default_factory=NodeTokenLimits)
     grpc: GrpcSettings = Field(default_factory=GrpcSettings)
+    max_rework_cycles: int = 2  # Cap Critic/Evaluator rework loops per task (optimizing small 3B models)
     
 @lru_cache()
 def get_settings() -> Settings:

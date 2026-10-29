@@ -39,7 +39,8 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
 
     extraction_prompt = (
         "You are a precise Information Extraction engine. Your ONLY job is to read the "
-        "following executor response and extract structured data.\n\n"
+        "following executor response and extract structured data.\n"
+        f"CRITICAL: All extracted findings and the result_summary MUST remain strictly in the user's language ({state.get('detected_language', 'the user language')}). Do NOT translate or summarize into Chinese.\n\n"
         "Extract:\n"
         "1. result_summary — a concise 1-3 sentence digest capturing the main answer or conclusion.\n"
         "2. findings — a list of key factual claims, each with:\n"

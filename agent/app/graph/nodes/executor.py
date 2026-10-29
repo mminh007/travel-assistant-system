@@ -21,7 +21,7 @@ from app.core.metrics import SOFT_STOP_TRIGGER_TOTAL
 
 logger = setup_app_logger("CognitiveNodes")
 
-COMPACT_AGENT_REMINDER = "REMINDER: Output ONLY the JSON/Markdown block. No pleasantries. Think step-by-step but keep thoughts under 2 sentences."
+COMPACT_AGENT_REMINDER = "REMINDER: Output ONLY the response in the user's input language. No pleasantries. Think step-by-step but keep thoughts under 2 sentences."
 
 
 def _sanitize_orphaned_tool_calls(messages: list) -> list:
@@ -115,6 +115,7 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     intent_category = state.get("intent_category", "travel_faq")
 
     user_initial_prompt = state["messages"][0].content if state["messages"] else ""
+    detected_language = state.get("detected_language") or ("Vietnamese" if any(c in user_initial_prompt.lower() for c in "àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờỡợùúủũụưứừửữựỳýỷỹỵđ") else "English")
     manifest = load_agent_manifest_instructions()
     task_context = _build_task_context(state)
 
@@ -129,7 +130,8 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
         f"{manifest}\n\n"
         f"You are the TRAVEL_REACT_AGENT operating in a Reason-and-Act (ReAct) loop.\n"
         f"Current task intent: {intent_category.upper()}\n"
-        f"Directives: {intent_instructions}\n\n"
+        f"Directives: {intent_instructions}\n"
+        f"CRITICAL LANGUAGE RULE: The user is communicating in '{detected_language}'. You MUST think, act, and formulate your FINAL ANSWER strictly in '{detected_language}'. Under NO circumstance should you switch, drift, or mix into Chinese or any other language.\n\n"
         "Follow this execution cycle:\n"
         "1. THOUGHT: Think step-by-step about the user's travel request and current state.\n"
         "2. ACTION: If you need external data (hotel info, flights), invoke the appropriate tool.\n"

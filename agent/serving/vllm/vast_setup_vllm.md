@@ -116,6 +116,7 @@ nvidia-smi
 
 ```bash
 # Grant execution permissions
+cd ~/agent/serving/vllm/configs
 chmod +x start_awq_kv_fp8.sh start_embedding.sh setup_hf.sh
 
 # Run Hugging Face setup & verification
@@ -301,14 +302,14 @@ K6_SCRIPT=grpc_stream_test.js docker compose --profile loadtest run --rm k6_load
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-| :--- | :--- | :--- |
+| Issue                                                                 | Cause                                             | Solution                                                                                                                                                    |
+| :-------------------------------------------------------------------- | :------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `No available memory for cache blocks` / `Available KV cache: -X GiB` | Leftover background process or wrong launch order | Run `fuser -k -9 /dev/nvidia*` $\rightarrow$ check `nvidia-smi` is 0MiB $\rightarrow$ start LLM first (`0.50`), wait for it, then start Embedding (`0.44`). |
-| `[Errno 101] Network is unreachable` to huggingface.co | Hugging Face blocked in host network / datacenter | Run `export HF_ENDPOINT="https://hf-mirror.com"` in `~/.bashrc`. |
-| `unrecognized arguments: --task embed` | vLLM v0.30+ changed embedding argument | Replace `--task embed` with `--runner pooling` in `start_embedding.sh`. |
-| `sessions should be nested with care` | Already inside a tmux session | Do not run `tmux new`; use current window or press `Ctrl+B` then `c` to create a new tab. |
-| Cannot scroll terminal in tmux | Mouse mode is disabled in tmux by default | Run `tmux set -g mouse on` or press `Ctrl+B` then `[` to enter scroll mode (`q` to exit). |
-| `Connection refused` to vLLM | Server has not started or wrong port | Check `tail -f llm.log` or verify port mapping with `env \| grep -iE "port\|vast"`. |
-| Grafana has no data | Prometheus cannot scrape vLLM metrics | Check target status at `http://localhost:9090/targets`. |
-| Qdrant dimension mismatch error | Using old collection from nine_router | Set `LLM_PROVIDER=vllm` $\rightarrow$ system auto-switches to `_vllm` collections. |
-| SSH disconnected during model download | Session timeout | Use `tmux` before running start scripts. |
+| `[Errno 101] Network is unreachable` to huggingface.co                | Hugging Face blocked in host network / datacenter | Run `export HF_ENDPOINT="https://hf-mirror.com"` in `~/.bashrc`.                                                                                            |
+| `unrecognized arguments: --task embed`                                | vLLM v0.30+ changed embedding argument            | Replace `--task embed` with `--runner pooling` in `start_embedding.sh`.                                                                                     |
+| `sessions should be nested with care`                                 | Already inside a tmux session                     | Do not run `tmux new`; use current window or press `Ctrl+B` then `c` to create a new tab.                                                                   |
+| Cannot scroll terminal in tmux                                        | Mouse mode is disabled in tmux by default         | Run `tmux set -g mouse on` or press `Ctrl+B` then `[` to enter scroll mode (`q` to exit).                                                                   |
+| `Connection refused` to vLLM                                          | Server has not started or wrong port              | Check `tail -f llm.log` or verify port mapping with `env \| grep -iE "port\|vast"`.                                                                         |
+| Grafana has no data                                                   | Prometheus cannot scrape vLLM metrics             | Check target status at `http://localhost:9090/targets`.                                                                                                     |
+| Qdrant dimension mismatch error                                       | Using old collection from nine_router             | Set `LLM_PROVIDER=vllm` $\rightarrow$ system auto-switches to `_vllm` collections.                                                                          |
+| SSH disconnected during model download                                | Session timeout                                   | Use `tmux` before running start scripts.                                                                                                                    |

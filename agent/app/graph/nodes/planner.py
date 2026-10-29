@@ -31,7 +31,8 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
                     "concrete, sequential sub-tasks. Focus on logical progression.\n\n"
                     f"Overarching Objective: {objective}\n"
                     "CRITICAL ROUTING RULES:\n"
-                    "- Only output logical travel tasks like 'Search for hotel', 'Check availability', etc."
+                    "- Only output logical travel tasks like 'Search for hotel', 'Check availability', etc.\n"
+                    f"- Write all task descriptions strictly in the user's language: {state.get('detected_language', 'Vietnamese')}. Never use Chinese."
                 )
             ),
             HumanMessage(content=user_initial_prompt)

@@ -23,6 +23,7 @@ from langchain_core.messages import HumanMessage
 from app.mcp.mcp_client import get_mcp_tools, DynamicMcpClientManager
 import asyncio
 from app.core.logger import setup_app_logger
+from app.core.settings import settings
 from app.core.metrics import FORCED_TERMINATION_TOTAL, DUPLICATE_TOOL_CALL_TOTAL, GRAPH_ITERATIONS
 
 logger = setup_app_logger("WorkflowOrchestrator")
@@ -102,7 +103,7 @@ def route_from_guardrail(state: AgentState) -> str:
 # ─── PHASE 2: CONFIGURABLE HARD LIMITS ───
 MAX_ITERATIONS   = 8    # Prevent infinite Thought/Action loops within a single task
 MAX_TOOL_CALLS   = 10   # Prevent budget drain across the execution lifecycle
-MAX_REWORK_CYCLES = 2   # Cap Critic→Reflection→Executor rework loops per task
+MAX_REWORK_CYCLES = getattr(settings, "max_rework_cycles", 2)   # Cap Critic Reflection Executor rework loops per task
 
 def generate_tool_hash(tool_name: str, args: dict) -> str:
     """Creates a unique deterministic hash for a tool call to detect exact duplicates."""
@@ -172,6 +173,7 @@ def route_from_evaluator(state: AgentState) -> str:
     if state.get("needs_rework"):
         if state.get("rework_count", 0) >= MAX_REWORK_CYCLES:
             FORCED_TERMINATION_TOTAL.labels(domain="travel_react_agent", reason="max_rework_cycles").inc()
+            logger.warning(f"==> [Evaluator Route] Status DEFICIENT but reached max rework cycles ({MAX_REWORK_CYCLES}). Accepting current response and routing to task_manager.")
             return "task_manager"
         return "travel_react_agent"
     return "task_manager"

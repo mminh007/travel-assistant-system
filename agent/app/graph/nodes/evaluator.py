@@ -119,17 +119,28 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
         token_update = {}
 
     new_rework_count = current_rework_count + 1 if evaluation.needs_rework else current_rework_count
+    max_rework = getattr(settings, "max_rework_cycles", 2)
+    rework_limit_reached = new_rework_count >= max_rework
+
+    effective_needs_rework = evaluation.needs_rework
+    if effective_needs_rework and rework_limit_reached:
+        logger.warning(
+            f"    ⚠️ [REWORK LIMIT REACHED] Status is DEFICIENT, but rework limit reached (Cycle {new_rework_count}/{max_rework}). "
+            f"Accepting current response to continue processing."
+        )
+        effective_needs_rework = False
+        evaluation.feedback = f"{evaluation.feedback} [Accepted: max rework cycles reached]"
 
     logger.info(f"    Status: {'✅ MET' if evaluation.objective_met else '❌ DEFICIENT'}")
     logger.info(f"    Scores: Tools={evaluation.tool_quality_score}, Evidence={evaluation.evidence_quality_score}, "
                 f"Citations={evaluation.citation_quality_score}, Freshness={evaluation.freshness_score}")
-    logger.info(f"    Correction Required: {evaluation.needs_rework} | Rework Cycle: {new_rework_count}")
+    logger.info(f"    Correction Required: {effective_needs_rework} | Rework Cycle: {new_rework_count}")
     logger.info(f"    Directive: {evaluation.actionable_advice}\n")
 
     return {
         "evaluator_feedback": evaluation.feedback,
         "evaluator_notes": evaluation.actionable_advice,
-        "needs_rework": evaluation.needs_rework,
+        "needs_rework": effective_needs_rework,
         "rework_count": new_rework_count,
         **token_update
     }
