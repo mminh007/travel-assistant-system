@@ -144,7 +144,7 @@ class SecuritySettings(BaseSettings):
 
 class NodeTokenLimits(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="NODE_MAX_TOKENS_", extra="ignore")
-    input_guardrail: int = 150
+    input_guardrail: int = 500  # Increased from 150 to 500 to prevent JSON truncation
     support_agent: int = 500
     planner_agent: int = 600
     travel_react_agent: int = 800

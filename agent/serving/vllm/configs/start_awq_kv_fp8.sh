@@ -9,6 +9,11 @@ PORT="${VLLM_PORT:-18000}"
 KV_DTYPE="${KV_CACHE_DTYPE:-auto}"
 GPU_UTIL="${VLLM_GPU_UTIL:-0.50}"
 echo "[vLLM] Starting Production LLM — Model: $MODEL | port=$PORT | max-len=4096 | gpu-util=$GPU_UTIL | kv-dtype=$KV_DTYPE"
+
+# TOOL PARSER NOTE:
+# Official vLLM and Alibaba Qwen documentation requires '--tool-call-parser hermes' for all
+# Qwen/Qwen2.5-* models (chat template in tokenizer_config.json implements Hermes tool use standard).
+# '--enable-auto-tool-choice' is mandatory when clients send 'tool_choice="auto"'.
 vllm serve "$MODEL" \
   --host 0.0.0.0 \
   --port "$PORT" \

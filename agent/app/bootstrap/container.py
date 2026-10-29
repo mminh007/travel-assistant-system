@@ -110,6 +110,7 @@ def _resolve_default_memory_llm(provider: str):
             temperature=0,
             api_key=api_key,
             base_url=settings.vllm.base_url,
+            extra_body={"reasoning_effort": "none"},
         )
 
     if provider == "claude":

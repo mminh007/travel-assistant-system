@@ -154,6 +154,7 @@ def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: floa
 
     if cache_key not in _LLM_INSTANCE_CACHE:
         logger.info(f"==> [LLM Factory] Instantiating {provider.upper()} model: {model_name} (Tier {tier}, Temp {temperature})")
+        extra_kwargs = {"extra_body": {"reasoning_effort": "none"}} if provider == "vllm" else {}
         _LLM_INSTANCE_CACHE[cache_key] = ChatOpenAI(
             model=model_name,
             api_key=api_key_str,
@@ -162,6 +163,7 @@ def get_llm_instance(tier: int, config: RunnableConfig = None, temperature: floa
             temperature=temperature,
             streaming=True,
             max_retries=5,
+            **extra_kwargs
         )
 
     return _LLM_INSTANCE_CACHE[cache_key]

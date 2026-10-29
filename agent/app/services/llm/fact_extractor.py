@@ -21,7 +21,11 @@ class FactExtractor:
     def __init__(self, llm_model):
         self.memory_llm = llm_model
         try:
-            self.structured_llm = self.memory_llm.with_structured_output(LongTermFacts)
+            model_name = getattr(self.memory_llm, "model_name", "") or getattr(self.memory_llm, "model", "")
+            if any(tag in str(model_name).lower() for tag in ["3b", "1.5b", "0.5b", "mini", "7b"]):
+                self.structured_llm = self.memory_llm.with_structured_output(LongTermFacts, method="json_mode")
+            else:
+                self.structured_llm = self.memory_llm.with_structured_output(LongTermFacts)
             self._use_structured = True
         except Exception:
             self.structured_llm = self.memory_llm
@@ -46,22 +50,28 @@ class FactExtractor:
         if not conversation_text.strip():
             return None
             
-        if not getattr(self, "_use_structured", True):
-            import json
-            resp = await self.memory_llm.ainvoke([
-                SystemMessage(content=self.prompt_instruction + 
-                    '\n\nOutput a JSON object matching this schema: {"facts": [{"category": "...", "text": "...", "semantic_anchors": [...], "importance": 0.5}]}'),
-                HumanMessage(content=conversation_text)
-            ])
+        if getattr(self, "_use_structured", True):
             try:
-                data = json.loads(resp.content.replace("```json", "").replace("```", "").strip())
-                return LongTermFacts(**data)
+                extracted_data = await self.structured_llm.ainvoke([
+                    SystemMessage(content=self.prompt_instruction),
+                    HumanMessage(content=conversation_text)
+                ])
+                if extracted_data is not None:
+                    return extracted_data
             except Exception:
-                return None
+                pass  # Fall through to manual JSON extraction below
 
-        extracted_data = await self.structured_llm.ainvoke([
-            SystemMessage(content=self.prompt_instruction),
+        import json
+        resp = await self.memory_llm.ainvoke([
+            SystemMessage(content=self.prompt_instruction + 
+                '\n\nOutput a valid JSON object matching this schema: {"facts": [{"category": "user_preference", "text": "...", "semantic_anchors": ["..."], "importance": 0.5}]}'),
             HumanMessage(content=conversation_text)
         ])
-        
-        return extracted_data
+        try:
+            content = resp.content.strip()
+            if "```" in content:
+                content = content.replace("```json", "").replace("```", "").strip()
+            data = json.loads(content)
+            return LongTermFacts(**data)
+        except Exception:
+            return None
