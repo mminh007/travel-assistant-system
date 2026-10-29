@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-29
 - **Status:** ✅ FIXED
-- **Solution File:** [solutions/FIXED_bug_report_langgraph_recursion_limit.md](file:///d:/proj/Booking/agent/bugs/solutions/FIXED_bug_report_langgraph_recursion_limit.md)
+- **Solution File:** [/solutions/FIXED_bug_report_langgraph_recursion_limit.md](solutions/FIXED_bug_report_langgraph_recursion_limit.md)
 - **Environment:** Multi-Agent Platform (vLLM, LangGraph, gRPC Core Engine)
 - **Log Source:** `agent/logs/agent_platform.html`
 - **Request Details:**
@@ -42,7 +42,7 @@ Simultaneously, the execution logs revealed **three other severe issues regardin
   [2026-10-29 02:56:42] [ERROR] [ChatStreamService] Runtime exception: Recursion limit of 25 reached without hitting a stop condition.
   [2026-10-29 02:56:42] [ERROR] [GrpcServerCore] ==> [gRPC] Error from ChatStreamService: Recursion limit of 25 reached without hitting a stop condition.
   ```
-* **Code Location:** [agent/app/services/streaming/chat_stream_service.py](file:///d:/proj/Booking/agent/app/services/streaming/chat_stream_service.py#L88-L137)
+* **Code Location:** [agent/app/services/streaming/chat_stream_service.py](../app/services/streaming/chat_stream_service.py#L88-L137)
 * **Root Cause:** The `trace_config` passed into `graph_instance.astream_events(...)` **omits the `recursion_limit` parameter**, causing LangGraph to enforce its default cap of **25**. However, the Planner broke the request into **4 tasks**, each requiring ReAct loops, tool executions, fact validation, and evaluator reflections. The total steps required for this workflow range from 50 to 80 steps.
 
 ---
@@ -88,43 +88,43 @@ Simultaneously, the execution logs revealed **three other severe issues regardin
 
 ## 3. Step-by-Step Trajectory Analysis
 
-| Step | Node / Action | Timestamp | Status / Description |
-| :---: | :--- | :---: | :--- |
-| **1** | `input_guardrail` | `02:55:53` | Success. Intent: `ITINERARY_PLANNING`, Complexity: `MEDIUM` |
-| **2** | `planner_agent` | `02:55:54` | Success. Decomposed into **4 subtasks** |
-| **3 - 4** | `travel_react_agent` + `search_web` | `02:56:02` | Task 1: Search for Da Lat 3D2N itinerary data |
-| **5** | `finding_extractor` | `02:56:15` | Extracted 2 initial findings |
-| **6** | `fact_checker` | `02:56:18` | **FAIL:** Token overflow (`length limit reached`), bypassed validation |
-| **7** | `evaluator_agent` | `02:56:19` | **FAIL:** Scored `DEFICIENT`, triggered **Rework Cycle 1** |
-| **8** | `travel_react_agent` (Rework) | `02:56:21` | Re-executing Task 1 |
-| **9** | `finding_extractor` | `02:56:21` | **FAIL:** Output in Chinese + Geographic hallucination (Da Nang $\leftrightarrow$ Da Lat) |
-| **10** | `fact_checker` | `02:56:23` | Flagged contradictions |
-| **11** | `evaluator_agent` | `02:56:24` | **FAIL:** Scored `DEFICIENT`, reached Rework Cycle 2 cap |
-| **12** | `task_manager` | `02:56:24` | Advanced to Task 2: *Book accommodations* |
-| **13 - 14** | `travel_react_agent` + `search_web` | `02:56:26` | Task 2: Search for hotels |
-| **15 - 16** | `travel_react_agent` + `search_hotel_database` | `02:56:32` | Query local hotel vector store |
-| **17 - 18** | `travel_react_agent` + `search_web` | `02:56:33` | Search 5-star hotels under 1,000k VND |
-| **19** | `finding_extractor` | `02:56:41` | Extracted hotel findings |
-| **20 - 25** | Internal transitions | `02:56:42` | **CRASH:** Hit ceiling of **25 recursion steps** $\rightarrow$ Service error |
+|    Step     | Node / Action                                  | Timestamp  | Status / Description                                                                      |
+| :---------: | :--------------------------------------------- | :--------: | :---------------------------------------------------------------------------------------- |
+|    **1**    | `input_guardrail`                              | `02:55:53` | Success. Intent: `ITINERARY_PLANNING`, Complexity: `MEDIUM`                               |
+|    **2**    | `planner_agent`                                | `02:55:54` | Success. Decomposed into **4 subtasks**                                                   |
+|  **3 - 4**  | `travel_react_agent` + `search_web`            | `02:56:02` | Task 1: Search for Da Lat 3D2N itinerary data                                             |
+|    **5**    | `finding_extractor`                            | `02:56:15` | Extracted 2 initial findings                                                              |
+|    **6**    | `fact_checker`                                 | `02:56:18` | **FAIL:** Token overflow (`length limit reached`), bypassed validation                    |
+|    **7**    | `evaluator_agent`                              | `02:56:19` | **FAIL:** Scored `DEFICIENT`, triggered **Rework Cycle 1**                                |
+|    **8**    | `travel_react_agent` (Rework)                  | `02:56:21` | Re-executing Task 1                                                                       |
+|    **9**    | `finding_extractor`                            | `02:56:21` | **FAIL:** Output in Chinese + Geographic hallucination (Da Nang $\leftrightarrow$ Da Lat) |
+|   **10**    | `fact_checker`                                 | `02:56:23` | Flagged contradictions                                                                    |
+|   **11**    | `evaluator_agent`                              | `02:56:24` | **FAIL:** Scored `DEFICIENT`, reached Rework Cycle 2 cap                                  |
+|   **12**    | `task_manager`                                 | `02:56:24` | Advanced to Task 2: *Book accommodations*                                                 |
+| **13 - 14** | `travel_react_agent` + `search_web`            | `02:56:26` | Task 2: Search for hotels                                                                 |
+| **15 - 16** | `travel_react_agent` + `search_hotel_database` | `02:56:32` | Query local hotel vector store                                                            |
+| **17 - 18** | `travel_react_agent` + `search_web`            | `02:56:33` | Search 5-star hotels under 1,000k VND                                                     |
+|   **19**    | `finding_extractor`                            | `02:56:41` | Extracted hotel findings                                                                  |
+| **20 - 25** | Internal transitions                           | `02:56:42` | **CRASH:** Hit ceiling of **25 recursion steps** $\rightarrow$ Service error              |
 
 ---
 
 ## 4. Model Evaluation: Qwen2.5-3B-Instruct-AWQ
 
-| Evaluation Metric | Assessment in Agent Environment | Notes |
-| :--- | :---: | :--- |
-| **Inference Latency** | Fast (~1–2s / inference) | The sole advantage of the 3B AWQ quantized model. |
-| **Instruction Following** | Poor | Fails language consistency (drifts into Chinese on Vietnamese input). |
-| **Tool Calling & Reasoning** | Below Average | Can dispatch tools, but struggles to synthesize tool output into coherent logic. |
-| **Reflection & Self-Correction** | Very Poor | Unable to self-correct based on Evaluator directives (scores regressed on rework). |
-| **Context Window Handling** | Poor | Prone to `max_tokens` truncation on structured verification nodes (`fact_checker`). |
+| Evaluation Metric                | Assessment in Agent Environment | Notes                                                                               |
+| :------------------------------- | :-----------------------------: | :---------------------------------------------------------------------------------- |
+| **Inference Latency**            |    Fast (~1–2s / inference)     | The sole advantage of the 3B AWQ quantized model.                                   |
+| **Instruction Following**        |              Poor               | Fails language consistency (drifts into Chinese on Vietnamese input).               |
+| **Tool Calling & Reasoning**     |          Below Average          | Can dispatch tools, but struggles to synthesize tool output into coherent logic.    |
+| **Reflection & Self-Correction** |            Very Poor            | Unable to self-correct based on Evaluator directives (scores regressed on rework).  |
+| **Context Window Handling**      |              Poor               | Prone to `max_tokens` truncation on structured verification nodes (`fact_checker`). |
 
 ---
 
 ## 5. Remediation Plan & Recommended Fixes
 
 ### Recommendation 1: Increase `recursion_limit` in Code
-Update [agent/app/services/streaming/chat_stream_service.py](file:///d:/proj/Booking/agent/app/services/streaming/chat_stream_service.py):
+Update [agent/app/services/streaming/chat_stream_service.py](../app/services/streaming/chat_stream_service.py):
 ```python
 trace_config = {
     "recursion_limit": 100,  # Increase to 80-100 to support 4 subtasks + reflection cycles

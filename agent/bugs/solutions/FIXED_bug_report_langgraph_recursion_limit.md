@@ -20,21 +20,21 @@
 To resolve the crash caused by `GRAPH_RECURSION_LIMIT` and the model reasoning degradation issues encountered with `Qwen/Qwen2.5-3B-Instruct-AWQ`, the following targeted architectural and prompt fixes were implemented:
 
 1. **Expanded Token Budget for Fact Checker:**
-   - Increased `fact_checker` max token limit from `300` to `1000` in [agent/app/core/settings.py](file:///d:/proj/Booking/agent/app/core/settings.py) to prevent JSON cutoff during structured validation.
+   - Increased `fact_checker` max token limit from `300` to `1000` in [agent/app/core/settings.py](../../app/core/settings.py) to prevent JSON cutoff during structured validation.
 2. **Enforced Strict Language Matching Across System Prompts:**
-   - Injected strict language matching constraints into [agent/workflow.md](file:///d:/proj/Booking/agent/workflow.md), [agent/app/graph/nodes/executor.py](file:///d:/proj/Booking/agent/app/graph/nodes/executor.py), [agent/app/graph/nodes/extractor.py](file:///d:/proj/Booking/agent/app/graph/nodes/extractor.py), and [agent/app/graph/nodes/planner.py](file:///d:/proj/Booking/agent/app/graph/nodes/planner.py) to prevent the model from drifting into Chinese or mixing languages.
+   - Injected strict language matching constraints into [agent/workflow.md](../../workflow.md), [agent/app/graph/nodes/executor.py](../../app/graph/nodes/executor.py), [agent/app/graph/nodes/extractor.py](../../app/graph/nodes/extractor.py), and [agent/app/graph/nodes/planner.py](../../app/graph/nodes/planner.py) to prevent the model from drifting into Chinese or mixing languages.
 3. **Optimized Rework Loop Mechanism for 3B LLMs (Graceful Degradation):**
-   - Configured `max_rework_cycles` in settings.
-   - Updated [agent/app/graph/nodes/evaluator.py](file:///d:/proj/Booking/agent/app/graph/nodes/evaluator.py) and [agent/app/graph/workflow.py](file:///d:/proj/Booking/agent/app/graph/workflow.py): if the evaluation status remains `DEFICIENT` after reaching the rework cycle ceiling, the evaluator now explicitly accepts the current executor output (`needs_rework = False`) and proceeds directly to the next task or final synthesis instead of attempting further unproductive retries.
+   - Configured `max_rework_cycles` in settings.  
+   - Updated [agent/app/graph/nodes/evaluator.py](../../app/graph/nodes/evaluator.py) and [agent/app/graph/workflow.py](../../app/graph/workflow.py): if the evaluation status remains `DEFICIENT` after reaching the rework cycle ceiling, the evaluator now explicitly accepts the current executor output (`needs_rework = False`) and proceeds directly to the next task or final synthesis instead of attempting further unproductive retries.
 4. **Configured Graph Recursion Limit in Streaming:**
-   - Added `"recursion_limit": 100` to `trace_config` in [agent/app/services/streaming/chat_stream_service.py](file:///d:/proj/Booking/agent/app/services/streaming/chat_stream_service.py) to comfortably accommodate multi-task ReAct plans with tools and reflection steps.
+   - Added `"recursion_limit": 100` to `trace_config` in [agent/app/services/streaming/chat_stream_service.py](../../app/services/streaming/chat_stream_service.py) to comfortably accommodate multi-task ReAct plans with tools and reflection steps.
 
 ---
 
 ## 2. File-by-File Implementation Details
 
 ### 2.1. Fact Checker Token Headroom Expansion
-* **File:** [agent/app/core/settings.py](file:///d:/proj/Booking/agent/app/core/settings.py)
+* **File:** [agent/app/core/settings.py](../../app/core/settings.py)
 * **Change:**
   ```python
   class NodeTokenLimits(BaseSettings):
@@ -55,26 +55,26 @@ To resolve the crash caused by `GRAPH_RECURSION_LIMIT` and the model reasoning d
 
 ### 2.2. Strict Anti-Drift Language Constraints
 * **Files:**
-  - [agent/workflow.md](file:///d:/proj/Booking/agent/workflow.md): Added strict anti-drift directives to the master manifest:
+  - [agent/workflow.md](../../workflow.md): Added strict anti-drift directives to the master manifest:
     ```markdown
     * **Dynamic Response Language & Strict Language Matching:** Adapt the response language dynamically based on the user's input. If the user initiates the conversation or queries in English, respond strictly in English. If the user queries in Vietnamese, respond strictly in Vietnamese.
     * **Strict Anti-Drift Rule:** Under NO circumstances should any agent, executor, or extractor switch or drift to Chinese, or mix Chinese characters into a Vietnamese or English query response. All generated thoughts, answers, and findings must strictly match the user's input language.
     ```
-  - [agent/app/graph/nodes/executor.py](file:///d:/proj/Booking/agent/app/graph/nodes/executor.py): Added dynamic prompt injection for `travel_react_agent`:
+  - [agent/app/graph/nodes/executor.py](../../app/graph/nodes/executor.py): Added dynamic prompt injection for `travel_react_agent`:
     ```python
     f"CRITICAL LANGUAGE RULE: The user is communicating in '{detected_language}'. You MUST think, act, and formulate your FINAL ANSWER strictly in '{detected_language}'. Under NO circumstance should you switch, drift, or mix into Chinese or any other language.\n\n"
     ```
     Updated `COMPACT_AGENT_REMINDER` to enforce user language output.
-  - [agent/app/graph/nodes/extractor.py](file:///d:/proj/Booking/agent/app/graph/nodes/extractor.py): Added instruction ensuring extracted statements and summary retain the user's detected language without translation to Chinese.
-  - [agent/app/graph/nodes/planner.py](file:///d:/proj/Booking/agent/app/graph/nodes/planner.py): Added instruction ensuring planned subtask descriptions match the user's detected language.
+  - [agent/app/graph/nodes/extractor.py](../../app/graph/nodes/extractor.py): Added instruction ensuring extracted statements and summary retain the user's detected language without translation to Chinese.
+  - [agent/app/graph/nodes/planner.py](../../app/graph/nodes/planner.py): Added instruction ensuring planned subtask descriptions match the user's detected language.
 
 ---
 
 ### 2.3. Rework Loop Optimization for 3B Model
 * **Files:** 
-  - [agent/app/core/settings.py](file:///d:/proj/Booking/agent/app/core/settings.py)
-  - [agent/app/graph/nodes/evaluator.py](file:///d:/proj/Booking/agent/app/graph/nodes/evaluator.py)
-  - [agent/app/graph/workflow.py](file:///d:/proj/Booking/agent/app/graph/workflow.py)
+  - [agent/app/core/settings.py](../../app/core/settings.py)
+  - [agent/app/graph/nodes/evaluator.py](../../app/graph/nodes/evaluator.py)
+  - [agent/app/graph/workflow.py](../../app/graph/workflow.py)
 * **Logic:**
   When `evaluator_agent` runs:
   ```python
@@ -107,7 +107,7 @@ To resolve the crash caused by `GRAPH_RECURSION_LIMIT` and the model reasoning d
 ---
 
 ### 2.4. Streaming Recursion Limit Safeguard
-* **File:** [agent/app/services/streaming/chat_stream_service.py](file:///d:/proj/Booking/agent/app/services/streaming/chat_stream_service.py)
+* **File:** [agent/app/services/streaming/chat_stream_service.py](../../app/services/streaming/chat_stream_service.py)
 * **Change:**
   ```python
   trace_config = {
