@@ -2,7 +2,7 @@
 // ============================================================
 // Travel Assistant System — Comprehensive gRPC Performance Test
 // Protocol: HTTP/2 gRPC Streaming (chat.AgentService/StreamChat)
-// Covers: 10 → 50 → 100 → 200 VU step-up ramp
+// Covers: 10 → 50 → 100 → 200 VU ramp & 300, 500, 700, 1000 VU stress profiles
 // Supports: CACHE_MODE, COMPLEXITY_FILTER, STAGE_PROFILE env vars
 // Pushes custom metrics to Prometheus via Remote Write
 // Outputs: /load_tests/reports/grpc_test_{datetime}.html & .json
@@ -45,7 +45,7 @@ const requestsPerComplexity = {
 const GRPC_HOST         = __ENV.AGENT_GRPC_HOST   || 'agent_grpc:50051';
 const CACHE_MODE        = __ENV.CACHE_MODE        || 'unique';   // 'unique' | 'mixed'
 const COMPLEXITY_FILTER = __ENV.COMPLEXITY_FILTER || 'all';      // 'all' | 'low' | 'medium' | 'high'
-const STAGE_PROFILE     = __ENV.STAGE_PROFILE     || 'stepup';   // 'stepup' | 'soak' | 'spike' | 'smoke'
+const STAGE_PROFILE     = __ENV.STAGE_PROFILE     || 'stepup';   // 'stepup' | 'stepup_heavy' | 'stress_300' | 'stress_500' | 'stress_700' | 'stress_1000' | 'soak' | 'spike' | 'smoke'
 
 // ─── LOAD QUESTION DATABASE ─────────────────────────────────
 const ALL_QUESTIONS = new SharedArray('questions', function () {
@@ -63,7 +63,7 @@ const QUESTIONS_BY_COMPLEXITY = {
 
 // ─── STAGE PROFILES ──────────────────────────────────────────
 const STAGE_PROFILES = {
-    // 🎯 Main target: 10 → 50 → 100 → 200 VU step-up
+    // 🎯 Main target: 10 → 50 → 100 → 200 VU step-up (~17m)
     stepup: [
         { duration: '2m',  target: 10  },  // Stage 1: Baseline / warm-up (10 VUs)
         { duration: '1m',  target: 10  },  // Hold at 10 for stable baseline
@@ -74,6 +74,43 @@ const STAGE_PROFILES = {
         { duration: '3m',  target: 200 },  // Stage 4: Stress — monitors queue + preemptions
         { duration: '1m',  target: 200 },  // Hold at 200
         { duration: '2m',  target: 0   },  // Cool-down
+    ],
+    // 🚀 Extreme Step-up: 300 → 500 → 700 → 1000 VU step-up (~18m)
+    stepup_heavy: [
+        { duration: '2m',  target: 300  },  // Stage 1: Ramp to 300 VUs
+        { duration: '2m',  target: 300  },  // Hold at 300 VUs
+        { duration: '2m',  target: 500  },  // Stage 2: Ramp to 500 VUs
+        { duration: '2m',  target: 500  },  // Hold at 500 VUs
+        { duration: '2m',  target: 700  },  // Stage 3: Ramp to 700 VUs
+        { duration: '2m',  target: 700  },  // Hold at 700 VUs
+        { duration: '2m',  target: 1000 },  // Stage 4: Peak stress to 1000 VUs
+        { duration: '2m',  target: 1000 },  // Hold at 1000 VUs
+        { duration: '2m',  target: 0    },  // Cool-down
+    ],
+    // 💥 Dedicated Cases: 300, 500, 700, 1000 Concurrent Users (VUs)
+    // 300 VUs Concurrent Load (~6m)
+    stress_300: [
+        { duration: '1m30s', target: 300 },  // Ramp-up to 300 VUs
+        { duration: '3m30s', target: 300 },  // Sustained 300 concurrent users
+        { duration: '1m',    target: 0   },  // Cool-down
+    ],
+    // 500 VUs Concurrent Load (~7m)
+    stress_500: [
+        { duration: '2m',    target: 500 },  // Ramp-up to 500 VUs
+        { duration: '4m',    target: 500 },  // Sustained 500 concurrent users
+        { duration: '1m',    target: 0   },  // Cool-down
+    ],
+    // 700 VUs Concurrent Load (~8m)
+    stress_700: [
+        { duration: '2m30s', target: 700 },  // Ramp-up to 700 VUs
+        { duration: '4m',    target: 700 },  // Sustained 700 concurrent users
+        { duration: '1m30s', target: 0   },  // Cool-down
+    ],
+    // 1000 VUs Concurrent Load (~9m)
+    stress_1000: [
+        { duration: '3m',    target: 1000 }, // Ramp-up to 1000 VUs
+        { duration: '4m',    target: 1000 }, // Sustained 1000 concurrent users
+        { duration: '2m',    target: 0    }, // Cool-down
     ],
     // 30-minute sustained load at 50 VUs — detect memory leaks, Redis OOM
     soak: [
@@ -95,6 +132,26 @@ const STAGE_PROFILES = {
         { duration: '30s', target: 0   },
     ],
 };
+
+// Aliases for convenient CLI usage (-e STAGE_PROFILE=300 / 500 / 700 / 1000 or vu300 / vu500 / vu700 / vu1000)
+STAGE_PROFILES['300']          = STAGE_PROFILES.stress_300;
+STAGE_PROFILES['vu300']        = STAGE_PROFILES.stress_300;
+STAGE_PROFILES['vu_300']       = STAGE_PROFILES.stress_300;
+
+STAGE_PROFILES['500']          = STAGE_PROFILES.stress_500;
+STAGE_PROFILES['vu500']        = STAGE_PROFILES.stress_500;
+STAGE_PROFILES['vu_500']       = STAGE_PROFILES.stress_500;
+
+STAGE_PROFILES['700']          = STAGE_PROFILES.stress_700;
+STAGE_PROFILES['vu700']        = STAGE_PROFILES.stress_700;
+STAGE_PROFILES['vu_700']       = STAGE_PROFILES.stress_700;
+
+STAGE_PROFILES['1000']         = STAGE_PROFILES.stress_1000;
+STAGE_PROFILES['vu1000']       = STAGE_PROFILES.stress_1000;
+STAGE_PROFILES['vu_1000']      = STAGE_PROFILES.stress_1000;
+
+STAGE_PROFILES['stepup_1k']    = STAGE_PROFILES.stepup_heavy;
+STAGE_PROFILES['stepup_1000']  = STAGE_PROFILES.stepup_heavy;
 
 // ─── THRESHOLDS ──────────────────────────────────────────────
 export const options = {

@@ -246,7 +246,7 @@ services:
       # Agent endpoints
       - AGENT_HTTP_URL=http://agent_api:8080
       # Test behavior
-      # STAGE_PROFILE: stepup | soak | spike | smoke (default: stepup)
+      # STAGE_PROFILE: stepup | stepup_heavy | stress_300 | stress_500 | stress_700 | stress_1000 | soak | spike | smoke (default: stepup)
       - STAGE_PROFILE=${STAGE_PROFILE:-stepup}
       # CACHE_MODE: unique (stress LLM/RAG, bypass semantic cache) | mixed (realistic)
       - CACHE_MODE=${CACHE_MODE:-unique}

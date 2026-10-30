@@ -110,6 +110,55 @@ docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup -e CACHE_MODE
 
 ---
 
+### Kịch bản Mở Rộng: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs đồng thời)
+
+Dùng để đánh giá ngưỡng bão hòa cực hạn (System Breaking Point) của hạ tầng vLLM Continuous Batching, Redis checkpointer và Agent backend.
+
+#### 1. Chạy bậc thang tải cao liên tục (300 → 500 → 700 → 1000 VUs trong ~18 phút):
+```powershell
+# HTTP SSE:
+docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup_heavy k6_perf_test
+
+# gRPC Streaming:
+docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup_heavy k6_grpc_perf_test
+```
+
+#### 2. Chạy cô lập từng mức tải đồng thời cụ thể:
+* **Mức 300 users đồng thời (~6 phút):**
+  ```powershell
+  # HTTP SSE:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_300 k6_perf_test
+  # gRPC:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_300 k6_grpc_perf_test
+  ```
+
+* **Mức 500 users đồng thời (~7 phút):**
+  ```powershell
+  # HTTP SSE:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_500 k6_perf_test
+  # gRPC:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_500 k6_grpc_perf_test
+  ```
+
+* **Mức 700 users đồng thời (~8 phút):**
+  ```powershell
+  # HTTP SSE:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_700 k6_perf_test
+  # gRPC:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_700 k6_grpc_perf_test
+  ```
+
+* **Mức 1000 users đồng thời (~9 phút):**
+  ```powershell
+  # HTTP SSE:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_1000 k6_perf_test
+  # gRPC:
+  docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_1000 k6_grpc_perf_test
+  ```
+*(Lưu ý: Bạn cũng có thể dùng cú pháp alias ngắn gọn `-e STAGE_PROFILE=300`, `-e STAGE_PROFILE=500`, `-e STAGE_PROFILE=700`, `-e STAGE_PROFILE=1000`)*
+
+---
+
 ### Kịch bản 2: Smoke Test (Kiểm tra nhanh 1-2 phút)
 
 Dùng để xác nhận toàn bộ đường truyền và kết nối trước khi chạy bài test lớn (chạy 3 VUs trong 90 giây):
