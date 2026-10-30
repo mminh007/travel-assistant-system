@@ -99,14 +99,22 @@ class ChatStreamService:
 
         langfuse_handler = None
         langsmith_tracer = None
+        callbacks = []
         if source == "http":
-            langfuse_handler = CallbackHandler(
-                session_id=session_id,
-                user_id=user_id,
-                tags=["prod-stream"]
-            )
-            langsmith_tracer = LangChainTracer(project_name="agent-ecosystem-prod")
-            trace_config["callbacks"] = [langfuse_handler, langsmith_tracer]
+            if getattr(settings, "LANGFUSE_PUBLIC_KEY", None):
+                try:
+                    langfuse_handler = CallbackHandler()
+                    callbacks.append(langfuse_handler)
+                except Exception as e:
+                    logger_instance.warning(f"Failed to initialize Langfuse callback: {e}")
+            if getattr(settings, "LANGSMITH_API_KEY", None):
+                try:
+                    langsmith_tracer = LangChainTracer(project_name="agent-ecosystem-prod")
+                    callbacks.append(langsmith_tracer)
+                except Exception as e:
+                    logger_instance.warning(f"Failed to initialize LangSmith tracer: {e}")
+            if callbacks:
+                trace_config["callbacks"] = callbacks
 
         is_anonymous = user_id.startswith("anon_")
         final_state_messages = []
@@ -237,4 +245,7 @@ class ChatStreamService:
             AGENT_REQUEST_DURATION_SECONDS.labels(source=source, status=stream_status).observe(total_elapsed)
             AGENT_REQUESTS_TOTAL.labels(source=source, status=stream_status).inc()
             if langfuse_handler:
-                langfuse_handler.flush()
+                try:
+                    langfuse_handler.flush()
+                except Exception:
+                    pass

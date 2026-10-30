@@ -1,0 +1,503 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Travel Assistant Performance Test Question Database",
+    "total": 60,
+    "distribution": {
+      "low": 20,
+      "medium": 25,
+      "high": 15
+    },
+    "intent_categories": [
+      "hotel_search",
+      "itinerary_planning",
+      "flight_search",
+      "faq_support",
+      "comparison",
+      "budget_planning"
+    ]
+  },
+  "questions": [
+    {
+      "id": "L001",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "da_nang", "beach", "short"],
+      "prompt": "Tìm khách sạn 5 sao ở Đà Nẵng gần biển Mỹ Khê có hồ bơi vô cực."
+    },
+    {
+      "id": "L002",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "nha_trang", "family", "short"],
+      "prompt": "Recommend top 3 family-friendly resorts in Nha Trang with a kids club and airport shuttle."
+    },
+    {
+      "id": "L003",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "ho_chi_minh", "business", "budget"],
+      "prompt": "Có khách sạn nào ở trung tâm Quận 1 TP.HCM phù hợp đi công tác, giá dưới 2.5 triệu/đêm không?"
+    },
+    {
+      "id": "L004",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "hoi_an", "romantic", "boutique"],
+      "prompt": "Find a romantic boutique hotel in Hoi An Ancient Town with free breakfast and river view."
+    },
+    {
+      "id": "L005",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "phu_quoc", "beach", "couple"],
+      "prompt": "Khách sạn nào ở Phú Quốc có bãi biển riêng và dịch vụ spa cho cặp đôi hưởng tuần trăng mật?"
+    },
+    {
+      "id": "L006",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "cancellation", "refund", "short"],
+      "prompt": "Làm thế nào để hủy đặt phòng và kiểm tra chính sách hoàn tiền trên hệ thống?"
+    },
+    {
+      "id": "L007",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "profile", "booking", "receipt"],
+      "prompt": "How can I update my guest contact information and view my booking receipt?"
+    },
+    {
+      "id": "L008",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "ha_noi", "4star", "budget"],
+      "prompt": "Khách sạn 4 sao nào ở Hà Nội gần Hồ Hoàn Kiếm có giá dưới 2 triệu/đêm?"
+    },
+    {
+      "id": "L009",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "da_lat", "mountain", "view"],
+      "prompt": "Tìm khách sạn ở Đà Lạt có view thung lũng đẹp, giá tầm 1.5 triệu/đêm."
+    },
+    {
+      "id": "L010",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "payment", "stripe", "short"],
+      "prompt": "Hệ thống hỗ trợ những phương thức thanh toán nào?"
+    },
+    {
+      "id": "L011",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "sapa", "eco", "trekking"],
+      "prompt": "Find eco-lodge or homestay in Sapa suitable for trekking with mountain views."
+    },
+    {
+      "id": "L012",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "mui_ne", "beach", "kite"],
+      "prompt": "Khách sạn nào ở Mũi Né gần bãi biển, phù hợp cho người chơi kite surfing?"
+    },
+    {
+      "id": "L013",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "check_in", "policy", "short"],
+      "prompt": "Giờ check-in và check-out tiêu chuẩn thường là mấy giờ?"
+    },
+    {
+      "id": "L014",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "vung_tau", "weekend", "couple"],
+      "prompt": "Recommend a good hotel in Vung Tau for a weekend getaway under $100 per night."
+    },
+    {
+      "id": "L015",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "ninh_binh", "nature", "boat"],
+      "prompt": "Tìm khách sạn hoặc homestay gần khu vực Tràng An Ninh Bình có view đẹp, giá phải chăng."
+    },
+    {
+      "id": "L016",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "can_tho", "floating_market", "delta"],
+      "prompt": "Khách sạn nào ở Cần Thơ gần chợ nổi Cái Răng và có chất lượng tốt?"
+    },
+    {
+      "id": "L017",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "pets", "policy"],
+      "prompt": "Tôi muốn đem theo thú cưng khi đặt phòng, hệ thống có hỗ trợ lọc khách sạn cho phép thú cưng không?"
+      },
+    {
+      "id": "L018",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "ha_giang", "scenic", "motorbike"],
+      "prompt": "Tìm chỗ nghỉ ở Hà Giang gần đèo Mã Pí Lèng cho chuyến đi phượt."
+    },
+    {
+      "id": "L019",
+      "complexity": "low",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → direct_executor → travel_react_agent → synthesizer",
+      "tags": ["hotel", "phan_thiet", "golf", "resort"],
+      "prompt": "Find a golf resort in Phan Thiet with sea view rooms and F&B facilities."
+    },
+    {
+      "id": "L020",
+      "complexity": "low",
+      "intent_category": "faq_support",
+      "expected_route": "guardrail → support_agent",
+      "tags": ["faq", "loyalty", "membership", "points"],
+      "prompt": "Hệ thống có chương trình tích điểm hoặc ưu đãi thành viên thân thiết không?"
+    },
+    {
+      "id": "M001",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "da_nang", "hoi_an", "family", "4days"],
+      "prompt": "Lập lịch trình du lịch Đà Nẵng - Hội An 4 ngày 3 đêm cho gia đình 4 người (2 người lớn, 2 trẻ em), ngân sách 20 triệu VND, kèm gợi ý khách sạn và ăn uống."
+    },
+    {
+      "id": "M002",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "phu_quoc", "luxury", "couple", "5days"],
+      "prompt": "Plan a 5-day luxury itinerary in Phu Quoc for a couple with a $1500 budget, including hotel recommendations and dining spots."
+    },
+    {
+      "id": "M003",
+      "complexity": "medium",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["comparison", "nha_trang", "beach", "city"],
+      "prompt": "So sánh ưu nhược điểm giữa việc nghỉ dưỡng ở khu vực Bãi Dài Cam Ranh và trung tâm thành phố Nha Trang, kèm gợi ý khách sạn 4-5 sao."
+    },
+    {
+      "id": "M004",
+      "complexity": "medium",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["budget", "ha_noi", "2persons", "10million"],
+      "prompt": "Lên lịch trình và phân bổ chi phí du lịch Hà Nội cho 2 người với tổng ngân sách 10 triệu VND, bao gồm khách sạn, ăn uống và tham quan."
+    },
+    {
+      "id": "M005",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "ha_noi", "ninh_binh", "weekend", "2days"],
+      "prompt": "Lập lịch trình cuối tuần 2 ngày 1 đêm từ Hà Nội đi Ninh Bình, phù hợp cho cặp đôi muốn khám phá thiên nhiên."
+    },
+    {
+      "id": "M006",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "da_lat", "spring", "flower", "3days"],
+      "prompt": "Plan a 3-day trip to Da Lat during flower festival season with cultural and nature activities, budget around 8 million VND per person."
+    },
+    {
+      "id": "M007",
+      "complexity": "medium",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["comparison", "phu_quoc", "con_dao", "island", "luxury"],
+      "prompt": "So sánh trải nghiệm du lịch Phú Quốc và Côn Đảo cho kỳ nghỉ 4 ngày: về cơ sở hạ tầng, dịch vụ, cảnh quan và chi phí trung bình."
+    },
+    {
+      "id": "M008",
+      "complexity": "medium",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["budget", "backpacker", "hcmc", "da_nang", "ha_noi"],
+      "prompt": "Tôi có 15 triệu để đi du lịch phượt Bắc - Nam (Hà Nội → Đà Nẵng → TP.HCM) trong 10 ngày. Lên kế hoạch chi tiết giúp mình."
+    },
+    {
+      "id": "M009",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "sapa", "trekking", "3days", "culture"],
+      "prompt": "Plan a 3-day trekking itinerary in Sapa including visits to ethnic minority villages, suitable for moderately fit travelers."
+    },
+    {
+      "id": "M010",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "mekong", "delta", "3days", "culture"],
+      "prompt": "Lập lịch trình 3 ngày khám phá miền Tây sông nước: Cần Thơ - Tiền Giang - Bến Tre, kèm gợi ý ăn đặc sản địa phương."
+    },
+    {
+      "id": "M011",
+      "complexity": "medium",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["hotel", "da_nang", "conference", "team", "group"],
+      "prompt": "Cần tìm khách sạn ở Đà Nẵng có phòng hội nghị cho 50 người, phù hợp tổ chức team building 2 ngày 1 đêm, ngân sách công ty khoảng 30 triệu."
+    },
+    {
+      "id": "M012",
+      "complexity": "medium",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["comparison", "ha_noi", "hcmc", "expat", "living"],
+      "prompt": "Compare Hanoi and Ho Chi Minh City as travel destinations for a 7-day trip: food scene, tourist attractions, accommodation costs, and overall vibe."
+    },
+    {
+      "id": "M013",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "hue", "hoi_an", "history", "culture", "3days"],
+      "prompt": "Lập lịch trình 3 ngày khám phá di sản văn hóa Huế - Hội An cho người yêu lịch sử, bao gồm các điểm tham quan UNESCO."
+    },
+    {
+      "id": "M014",
+      "complexity": "medium",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["budget", "solo", "backpacker", "5days", "central"],
+      "prompt": "Solo traveler với ngân sách 5 triệu cho 5 ngày ở miền Trung (Huế, Đà Nẵng, Hội An). Gợi ý lịch trình và chỗ nghỉ tiết kiệm."
+    },
+    {
+      "id": "M015",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "ha_long", "cruise", "2days", "kayak"],
+      "prompt": "Plan a 2-day 1-night Ha Long Bay cruise itinerary with kayaking and cave exploration, recommend a mid-range cruise boat."
+    },
+    {
+      "id": "M016",
+      "complexity": "medium",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["hotel", "wedding", "resort", "beach", "ceremony"],
+      "prompt": "Tìm resort ở Phú Quốc hoặc Đà Nẵng có thể tổ chức tiệc cưới bãi biển cho 100 khách, ngân sách khoảng 200-300 triệu."
+    },
+    {
+      "id": "M017",
+      "complexity": "medium",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["comparison", "hotel_type", "resort_vs_boutique", "hoi_an"],
+      "prompt": "Tôi đang phân vân giữa ở resort 5 sao ngoài bãi biển Cửa Đại và boutique hotel trong phố cổ Hội An. Tư vấn giúp mình nên chọn loại nào cho chuyến đi 3 ngày với bạn bè."
+    },
+    {
+      "id": "M018",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "kids", "theme_park", "hcmc", "vung_tau", "2days"],
+      "prompt": "Lập lịch trình 2 ngày cuối tuần cho gia đình có con nhỏ (4-8 tuổi) ở TP.HCM hoặc Vũng Tàu: vui chơi, ăn uống, nghỉ ngơi."
+    },
+    {
+      "id": "M019",
+      "complexity": "medium",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["budget", "digital_nomad", "monthly", "da_nang"],
+      "prompt": "Tôi là digital nomad, muốn sống và làm việc ở Đà Nẵng 1 tháng. Cần gợi ý chỗ ở dài hạn, coworking space, và ước tính chi phí sinh hoạt."
+    },
+    {
+      "id": "M020",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "honeymoon", "phu_quoc", "luxury", "5days"],
+      "prompt": "Plan a 5-day honeymoon trip in Phu Quoc: sunset cruise, private beach dinners, spa treatments, and 5-star resort recommendation."
+    },
+    {
+      "id": "M021",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "ha_giang", "loop", "motorbike", "4days"],
+      "prompt": "Lập lịch trình phượt xe máy vòng cung Hà Giang 4 ngày 3 đêm: tuyến đường, điểm nghỉ đêm, cung đèo đẹp nhất cần đi."
+    },
+    {
+      "id": "M022",
+      "complexity": "medium",
+      "intent_category": "hotel_search",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["hotel", "accessibility", "elderly", "disabled"],
+      "prompt": "Tìm khách sạn ở Hội An hoặc Đà Nẵng có đầy đủ tiện nghi cho người cao tuổi hoặc người khuyết tật đi xe lăn."
+    },
+    {
+      "id": "M023",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "food_tour", "hcmc", "street_food", "2days"],
+      "prompt": "Plan a 2-day street food and culinary tour in Ho Chi Minh City covering Districts 1, 3, and Binh Thanh."
+    },
+    {
+      "id": "M024",
+      "complexity": "medium",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (2-3 iter) → evaluator → synthesizer",
+      "tags": ["comparison", "season", "timing", "phu_quoc", "da_nang"],
+      "prompt": "Nên đi Phú Quốc hay Đà Nẵng vào tháng 4? So sánh thời tiết, lễ hội và giá cả giữa 2 điểm đến này vào thời điểm đó."
+    },
+    {
+      "id": "M025",
+      "complexity": "medium",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (2-4 iter) → evaluator → synthesizer",
+      "tags": ["itinerary", "photography", "da_lat", "ruins", "landscape"],
+      "prompt": "Lập lịch trình 3 ngày ở Đà Lạt dành cho người đam mê nhiếp ảnh: những địa điểm có cảnh đẹp nhất để chụp ảnh lúc bình minh và hoàng hôn."
+    },
+    {
+      "id": "H001",
+      "complexity": "high",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter, multiple tools) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["budget", "full_plan", "ha_noi", "2persons", "detailed", "long"],
+      "prompt": "Lên kế hoạch chi tiết cho chuyến du lịch Hà Nội 5 ngày 4 đêm cho 2 người: tổng ngân sách 15 triệu VND. Phân bổ cụ thể: tiền khách sạn, ăn uống theo từng bữa, vé tham quan, di chuyển nội địa. Kèm danh sách những nơi nhất định phải đến và những nhà hàng đặc sản Hà Nội không nên bỏ qua."
+    },
+    {
+      "id": "H002",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "multi_city", "south_east_asia", "7days", "long"],
+      "prompt": "I'm planning a 7-day trip across Southern Vietnam covering Ho Chi Minh City (2 days), Mekong Delta (1 day), Can Tho (1 day), and Phu Quoc (3 days). Please create a detailed day-by-day itinerary with hotel recommendations for each location, transportation between cities, approximate costs, and must-try local food at each stop."
+    },
+    {
+      "id": "H003",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "multi_city", "north_vietnam", "10days", "culture", "long"],
+      "prompt": "Tôi muốn khám phá miền Bắc Việt Nam trong 10 ngày: Hà Nội (2 ngày) → Ninh Bình (1 ngày) → Hạ Long Bay cruise (2 ngày) → Sapa (3 ngày) → Hà Giang (2 ngày). Lên lịch trình chi tiết từng ngày, gợi ý phương tiện di chuyển tốt nhất giữa các điểm, khách sạn phù hợp cho từng địa điểm với mức ngân sách trung bình-khá, và các hoạt động đặc sắc không nên bỏ lỡ ở mỗi nơi."
+    },
+    {
+      "id": "H004",
+      "complexity": "high",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["budget", "detailed_breakdown", "family", "da_nang", "long"],
+      "prompt": "Gia đình mình gồm 2 vợ chồng + 2 con (8 tuổi và 12 tuổi) muốn đi Đà Nẵng - Hội An 5 ngày 4 đêm. Tổng ngân sách là 40 triệu VND. Hãy lên kế hoạch chi tiết: gợi ý khách sạn phù hợp với trẻ em, lịch trình từng ngày phù hợp với cả người lớn và trẻ em, ước tính chi phí ăn uống theo từng bữa, vé các điểm tham quan, và tips tiết kiệm chi phí mà vẫn đảm bảo trải nghiệm tốt."
+    },
+    {
+      "id": "H005",
+      "complexity": "high",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (4-5 iter) → finding_extractor → fact_checker → evaluator → task_manager → synthesizer",
+      "tags": ["comparison", "multi_destination", "island", "long"],
+      "prompt": "Tôi đang phân vân giữa 3 lựa chọn cho kỳ nghỉ hè 7 ngày: (1) Phú Quốc nghỉ dưỡng resort 5 sao, (2) Côn Đảo khám phá thiên nhiên hoang sơ, (3) Hạ Long + Cát Bà kết hợp cruise và trekking. Ngân sách khoảng 50 triệu cho 2 người. Phân tích chi tiết ưu nhược điểm từng lựa chọn, bao gồm: chất lượng cảnh quan, loại hình hoạt động, mức độ đông khách, cơ sở hạ tầng lưu trú, và đề xuất lựa chọn cuối cùng kèm lý do."
+    },
+    {
+      "id": "H006",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "accessible", "elderly", "4days", "central", "long"],
+      "prompt": "Tôi cần lập kế hoạch du lịch cho bố mẹ (65-70 tuổi, sức khỏe bình thường, không đi bộ nhiều) du lịch Đà Nẵng - Hội An - Huế 4 ngày 3 đêm. Cần đảm bảo: di chuyển thoải mái (không leo núi nhiều), khách sạn có thang máy và tiện nghi đầy đủ, lịch trình nhẹ nhàng không quá dày đặc, ăn uống phù hợp cho người cao tuổi, ngân sách tầm 25 triệu cho 2 người."
+    },
+    {
+      "id": "H007",
+      "complexity": "high",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["budget", "luxury", "anniversary", "detailed", "long"],
+      "prompt": "Mình và vợ muốn tổ chức kỷ niệm 10 năm ngày cưới bằng chuyến du lịch đặc biệt. Ngân sách không giới hạn (khoảng 100-150 triệu VND cho 7 ngày 2 người). Hãy thiết kế trải nghiệm du lịch xa xỉ nhất có thể tại Việt Nam: resort sang trọng nhất, dining experience độc đáo, các hoạt động romantic và private, dịch vụ butler, helicopter tour nếu có. Có thể kết hợp nhiều địa điểm như Phú Quốc + Đà Nẵng nếu phù hợp."
+    },
+    {
+      "id": "H008",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator → task_manager → synthesizer",
+      "tags": ["itinerary", "corporate", "team_building", "multi_location", "long"],
+      "prompt": "Công ty mình cần tổ chức chuyến team building cho 80 nhân viên, thời gian 3 ngày 2 đêm, dự kiến vào tháng 3 năm sau. Địa điểm lựa chọn giữa Đà Nẵng và Nha Trang. Cần: resort có thể chứa 80 người, phòng hội nghị sức chứa 100 người, sân bãi hoạt động ngoài trời, chương trình team building activities, menu buffet đa dạng. Ngân sách tầm 300-400 triệu toàn bộ. Hãy so sánh 2 địa điểm và đề xuất phương án cụ thể."
+    },
+    {
+      "id": "H009",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "solo_female", "safety", "2weeks", "national_parks"],
+      "prompt": "I'm a solo female traveler planning 2 weeks in Vietnam for the first time. I want to cover: Hanoi and surroundings (3 days), Ha Long Bay cruise (2 days), Hoi An and Da Nang (4 days), and Ho Chi Minh City (3 days). Please create a detailed safety-conscious itinerary with trusted accommodation options, reliable transport between cities, safe areas to stay in each city, budget breakdown, and practical safety tips for solo female travelers in Vietnam."
+    },
+    {
+      "id": "H010",
+      "complexity": "high",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["budget", "sustainable", "eco", "community", "detailed", "long"],
+      "prompt": "Tôi quan tâm đến du lịch bền vững và muốn thiết kế chuyến đi 10 ngày khám phá Việt Nam theo hướng eco-tourism: ở homestay cộng đồng, tham gia vào hoạt động bảo tồn thiên nhiên, ăn uống tại các cơ sở địa phương, hạn chế carbon footprint. Ngân sách 20 triệu VND. Gợi ý hành trình, các tổ chức du lịch cộng đồng uy tín, và cách đảm bảo tiền mình chi tiêu thực sự có lợi cho người dân địa phương."
+    },
+    {
+      "id": "H011",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator → task_manager → synthesizer",
+      "tags": ["itinerary", "culinary", "cooking_class", "market", "6days", "long"],
+      "prompt": "Thiết kế hành trình ẩm thực 6 ngày xuyên Việt: khám phá văn hóa ẩm thực đặc sắc của 3 miền. Hà Nội (2 ngày): phở, bún chả, bánh mì và tour chợ đêm. Đà Nẵng/Hội An (2 ngày): mì Quảng, cao lầu, cơm gà và lớp học nấu ăn tại gia đình địa phương. TP.HCM (2 ngày): hủ tiếu Nam Vang, cơm tấm và khám phá ẩm thực đường phố Quận 4. Kèm gợi ý nhà hàng cụ thể, lớp cooking class uy tín và tour chợ thực phẩm."
+    },
+    {
+      "id": "H012",
+      "complexity": "high",
+      "intent_category": "comparison",
+      "expected_route": "guardrail → planner → travel_react_agent (4-5 iter) → finding_extractor → fact_checker → evaluator → task_manager → synthesizer",
+      "tags": ["comparison", "investment", "expat", "long_term", "city_comparison", "long"],
+      "prompt": "Tôi là người nước ngoài đang cân nhắc sống và làm việc lâu dài tại Việt Nam. Hãy so sánh chi tiết 4 thành phố: Hà Nội, TP.HCM, Đà Nẵng và Hội An về các tiêu chí: chi phí sinh hoạt hàng tháng (thuê nhà, ăn uống, di chuyển), chất lượng cuộc sống, cộng đồng expat, cơ sở hạ tầng y tế, môi trường không khí, và cơ hội kinh doanh/việc làm. Đề xuất thành phố phù hợp nhất cho từng nhóm đối tượng."
+    },
+    {
+      "id": "H013",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "adventure", "extreme", "multi_activity", "long"],
+      "prompt": "I'm an adventure sports enthusiast visiting Vietnam for 10 days. I want to pack in as many extreme activities as possible: motorbiking Ha Giang Loop, caving in Phong Nha-Ke Bang (Son Doong or Paradise Cave), kite surfing in Mui Ne, rock climbing in Cat Ba Island, and diving near Con Dao. Create a logistically feasible 10-day itinerary optimizing travel time between these locations, with accommodation recommendations at each stop and estimated activity costs."
+    },
+    {
+      "id": "H014",
+      "complexity": "high",
+      "intent_category": "budget_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["budget", "student", "backpacker", "long_term", "3months", "long"],
+      "prompt": "Tôi là sinh viên đại học, muốn đi du lịch Việt Nam 3 tháng trong mùa hè với tổng ngân sách 30 triệu VND (khoảng 10 triệu/tháng). Lên kế hoạch chi tiết: hành trình tổng thể (nên đi đâu trước, đâu sau), cách di chuyển tiết kiệm nhất giữa các tỉnh, gợi ý hostel/homestay giá rẻ chất lượng tốt, mẹo tiết kiệm chi phí ăn uống, các hoạt động miễn phí hoặc chi phí thấp ở mỗi điểm đến, và cách quản lý ngân sách hiệu quả trong suốt chuyến đi."
+    },
+    {
+      "id": "H015",
+      "complexity": "high",
+      "intent_category": "itinerary_planning",
+      "expected_route": "guardrail → planner → travel_react_agent (4-6 iter) → finding_extractor → fact_checker → evaluator (rework) → task_manager → synthesizer",
+      "tags": ["itinerary", "photography", "sunrise", "landscape", "multi_location", "long"],
+      "prompt": "Tôi là nhiếp ảnh gia chuyên chụp phong cảnh, muốn thiết kế hành trình 14 ngày ở Việt Nam tối ưu cho việc chụp ảnh: bình minh ở ruộng bậc thang Mù Cang Chải (tháng 9-10), sương mù Sapa, cảnh sắc Hà Giang, cánh đồng hoa cải Mộc Châu, và cảnh biển Mũi Né lúc hoàng hôn. Lên lịch di chuyển chi tiết, thời điểm vàng để chụp từng địa điểm, thuê xe/guide địa phương, và chỗ nghỉ gần nhất với các điểm chụp đẹp nhất."
+    }
+  ]
+}
+

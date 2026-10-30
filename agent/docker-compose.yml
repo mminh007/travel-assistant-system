@@ -229,6 +229,60 @@ services:
       prometheus:
         condition: service_started
 
+  # 🎯 TRAVEL PERFORMANCE TEST ENGINE — HTTP REST / SSE
+  k6_perf_test:
+    image: grafana/k6:latest
+    container_name: booking_k6_perf_runner
+    profiles:
+      - perftest
+    networks:
+      - agent_network
+    volumes:
+      - ./load_tests:/load_tests
+    environment:
+      # Prometheus Remote Write — push k6 custom metrics to Prometheus
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+      - K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true
+      # Agent endpoints
+      - AGENT_HTTP_URL=http://agent_api:8080
+      # Test behavior
+      # STAGE_PROFILE: stepup | soak | spike | smoke (default: stepup)
+      - STAGE_PROFILE=${STAGE_PROFILE:-stepup}
+      # CACHE_MODE: unique (stress LLM/RAG, bypass semantic cache) | mixed (realistic)
+      - CACHE_MODE=${CACHE_MODE:-unique}
+      # COMPLEXITY_FILTER: all | low | medium | high (default: all — weighted 40/40/20)
+      - COMPLEXITY_FILTER=${COMPLEXITY_FILTER:-all}
+    command: run -o experimental-prometheus-rw /load_tests/travel_perf_test.js
+    depends_on:
+      agent_api:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+  # 🎯 TRAVEL PERFORMANCE TEST ENGINE — GRPC STREAMING
+  k6_grpc_perf_test:
+    image: grafana/k6:latest
+    container_name: booking_k6_grpc_perf_runner
+    profiles:
+      - perftest
+    networks:
+      - agent_network
+    volumes:
+      - ./load_tests:/load_tests
+    environment:
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+      - K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=true
+      - AGENT_GRPC_HOST=agent_grpc:50051
+      - STAGE_PROFILE=${STAGE_PROFILE:-stepup}
+      - CACHE_MODE=${CACHE_MODE:-unique}
+      - COMPLEXITY_FILTER=${COMPLEXITY_FILTER:-all}
+    command: run -o experimental-prometheus-rw /load_tests/travel_grpc_perf_test.js
+    depends_on:
+      agent_grpc:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
 volumes:
   qdrant_data:
   grafana_storage:

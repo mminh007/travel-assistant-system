@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo Hiệu Năng — Travel Assistant System</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; line-height: 1.5; }
+        .container { max-width: 1100px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 32px; }
+        h1 { margin-top: 0; color: #0f172a; font-size: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+        .meta { color: #64748b; font-size: 14px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .meta-item { background: #f1f5f9; padding: 6px 12px; border-radius: 6px; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; text-align: center; }
+        .card-val { font-size: 26px; font-weight: 700; color: #0f172a; margin-top: 6px; }
+        .card-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { font-size: 18px; color: #334155; margin-top: 28px; margin-bottom: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; color: #475569; font-weight: 600; }
+        tr:hover { background: #f8fafc; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge.pass { background: #dcfce7; color: #166534; }
+        .badge.fail { background: #fee2e2; color: #991b1b; }
+        .footer { margin-top: 32px; font-size: 13px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Báo Cáo Hiệu Năng & Khả Năng Chịu Tải (Performance Report)</h1>
+        <div class="meta">
+            <div class="meta-item">⏱️ Thời gian test: <strong>10/30/2026, 04:41:25</strong></div>
+            <div class="meta-item">🎯 Profile kịch bản: <strong>stepup</strong></div>
+            <div class="meta-item">⚡ Cache Mode: <strong>unique</strong></div>
+            <div class="meta-item">🌐 Endpoint: <strong>http://agent_api:8080</strong></div>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <div class="card-label">Tổng Requests</div>
+                <div class="card-val">396</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Throughput (RPS)</div>
+                <div class="card-val">0.38 <span style="font-size: 13px; font-weight: normal;">req/s</span></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Tỷ Lệ Lỗi (Error Rate)</div>
+                <div class="card-val" style="color: #ef4444;">43.54%</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Semantic Cache Hit</div>
+                <div class="card-val" style="color: #6366f1;">0.00%</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Tổng Chunks SSE</div>
+                <div class="card-val">591</div>
+            </div>
+        </div>
+
+        <h2>⏱️ Phân Tầng Độ Trễ Theo Độ Phức Tạp (Latency Breakdown by Tier)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tầng Câu Hỏi (Complexity Tier)</th>
+                    <th style="text-align: center;">Số Request</th>
+                    <th style="text-align: right;">P50 (Median)</th>
+                    <th style="text-align: right;">P90</th>
+                    <th style="text-align: right;">P95 (SLA)</th>
+                    <th style="text-align: right;">Trung Bình</th>
+                    <th style="text-align: right;">TTFB P95 (First Token)</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td><strong>Low (Simple / FAQ / Quick Hotel)</strong></td>
+            <td style="text-align: center;">184</td>
+            <td style="text-align: right;">395.0 ms</td>
+            <td style="text-align: right;">299.98 s</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
+            <td style="text-align: right;">86.29 s</td>
+            <td style="text-align: right;">15.5 ms</td>
+        </tr>
+        <tr>
+            <td><strong>Medium (Itinerary / Comparison)</strong></td>
+            <td style="text-align: center;">146</td>
+            <td style="text-align: right;">299.97 s</td>
+            <td style="text-align: right;">299.98 s</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
+            <td style="text-align: right;">161.77 s</td>
+            <td style="text-align: right;">20.8 ms</td>
+        </tr>
+        <tr>
+            <td><strong>High (Complex / Multi-city / Budget)</strong></td>
+            <td style="text-align: center;">65</td>
+            <td style="text-align: right;">299.98 s</td>
+            <td style="text-align: right;">299.98 s</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
+            <td style="text-align: right;">191.88 s</td>
+            <td style="text-align: right;">109.9 ms</td>
+        </tr>
+        <tr>
+            <td><strong>Total (All Queries Combined)</strong></td>
+            <td style="text-align: center;">396</td>
+            <td style="text-align: right;">681.5 ms</td>
+            <td style="text-align: right;">299.98 s</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
+            <td style="text-align: right;">131.57 s</td>
+            <td style="text-align: right;">23.5 ms</td>
+        </tr>
+            </tbody>
+        </table>
+
+        <h2>🎯 Đánh Giá Tiêu Chuẩn SLA (Thresholds / SLAs)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Chỉ số (Metric)</th>
+                    <th>Điều kiện cam kết SLA</th>
+                    <th style="text-align: center;">Kết quả (Status)</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td><code>travel_e2e_ms_medium</code></td>
+                    <td>p(50)<8000</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_medium</code></td>
+                    <td>p(95)<20000</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_ttfb_ms_high</code></td>
+                    <td>p(95)<10000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_ttfb_ms_medium</code></td>
+                    <td>p(95)<5000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_error_rate</code></td>
+                    <td>rate<0.05</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_ttfb_ms_low</code></td>
+                    <td>p(95)<2000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_high</code></td>
+                    <td>p(95)<40000</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>http_req_failed</code></td>
+                    <td>rate<0.02</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_low</code></td>
+                    <td>p(50)<3000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_low</code></td>
+                    <td>p(95)<8000</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_all</code></td>
+                    <td>p(95)<40000</td>
+                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="footer">
+            Báo cáo được xuất tự động bởi <strong>k6 Travel Performance Test Engine</strong> — Travel Assistant System.<br/>
+            Dữ liệu time-series tương ứng được lưu trữ tại Prometheus và trực quan hóa tại Grafana Dashboard.
+        </div>
+    </div>
+</body>
+</html>

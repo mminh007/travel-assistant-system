@@ -1,0 +1,590 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "k6 Travel Performance Test — Step-up Load Results: VU ramp, E2E latency by complexity tier, TTFB, error rate, cache hit rate, SSE throughput, vLLM queue depth",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 200, "title": "🔫 k6 Load Generator — VU & Throughput", "type": "row" },
+
+    {
+      "id": 201, "type": "stat",
+      "title": "Active Virtual Users (VUs)",
+      "description": "Current number of k6 Virtual Users actively making requests",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50 },
+            { "color": "orange", "value": 100 },
+            { "color": "red", "value": 150 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "k6_vus",
+        "legendFormat": "VUs"
+      }]
+    },
+
+    {
+      "id": 202, "type": "stat",
+      "title": "Requests Per Second",
+      "description": "k6 HTTP request throughput (all VUs combined)",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "blue", "value": null }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "rate(k6_http_reqs_total[1m])",
+        "legendFormat": "RPS"
+      }]
+    },
+
+    {
+      "id": 203, "type": "stat",
+      "title": "HTTP Error Rate",
+      "description": "Percentage of k6 requests that received non-2xx responses",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.01 },
+            { "color": "red", "value": 0.05 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "rate(k6_http_req_failed_total[1m])",
+        "legendFormat": "HTTP Errors"
+      }]
+    },
+
+    {
+      "id": 204, "type": "stat",
+      "title": "App-Level Error Rate",
+      "description": "travel_error_rate: requests with SSE stream errors or non-200 status",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.02 },
+            { "color": "red", "value": 0.05 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "rate(travel_error_rate_total[1m])",
+        "legendFormat": "App Errors"
+      }]
+    },
+
+    {
+      "id": 205, "type": "stat",
+      "title": "SSE Chunks / Second",
+      "description": "Rate of SSE data chunks streamed to k6 clients (proxy for token throughput)",
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "blue", "value": null }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "rate(travel_sse_chunks_total[1m])",
+        "legendFormat": "SSE Chunks/s"
+      }]
+    },
+
+    {
+      "id": 206, "type": "stat",
+      "title": "Semantic Cache Hit Rate (k6)",
+      "description": "Proportion of requests served from Semantic Cache during load test",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "yellow", "value": 0.1 },
+            { "color": "green", "value": 0.3 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "rate(travel_cache_hit_rate_total[5m])",
+        "legendFormat": "Cache Hit Rate"
+      }]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 210, "title": "📈 VU Ramp — Step-up Timeline", "type": "row" },
+
+    {
+      "id": 211, "type": "timeseries",
+      "title": "VU Count Over Time (Step-up: 10 → 50 → 100 → 200)",
+      "description": "Tracks the k6 VU ramp profile during the step-up load test. Overlaid with RPS to show throughput scaling.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 7 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list" } },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "RPS" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "unit", "value": "reqps" }] }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "k6_vus",
+          "legendFormat": "VUs Active"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(k6_http_reqs_total[30s])",
+          "legendFormat": "RPS"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 220, "title": "⏱️ Latency — E2E Duration by Complexity Tier", "type": "row" },
+
+    {
+      "id": 221, "type": "timeseries",
+      "title": "E2E Latency P50 / P95 / P99 — LOW Complexity",
+      "description": "Simple hotel searches and FAQ queries (direct_executor path). Target: P95 < 8 seconds.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "unit": "ms" },
+        "overrides": [{ "matcher": { "id": "byName", "options": "P99" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [4, 4] } }] }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(travel_e2e_ms_low_bucket[1m]))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_e2e_ms_low_bucket[1m]))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, rate(travel_e2e_ms_low_bucket[1m]))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+
+    {
+      "id": 222, "type": "timeseries",
+      "title": "E2E Latency P50 / P95 / P99 — MEDIUM Complexity",
+      "description": "Itinerary planning and comparison queries (planner + ReAct loop). Target: P95 < 20 seconds.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(travel_e2e_ms_medium_bucket[1m]))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_e2e_ms_medium_bucket[1m]))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, rate(travel_e2e_ms_medium_bucket[1m]))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+
+    {
+      "id": 223, "type": "timeseries",
+      "title": "E2E Latency P50 / P95 / P99 — HIGH Complexity",
+      "description": "Full pipeline multi-task queries with rework cycles. Target: P95 < 40 seconds.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(travel_e2e_ms_high_bucket[1m]))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_e2e_ms_high_bucket[1m]))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, rate(travel_e2e_ms_high_bucket[1m]))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 230, "title": "🚀 TTFB — Time To First Byte (Proxy for TTFT)", "type": "row" },
+
+    {
+      "id": 231, "type": "timeseries",
+      "title": "TTFB P95 — All Complexity Tiers Compared",
+      "description": "TTFB approximates Time-To-First-Token from the user's perspective. Lower = better streaming responsiveness.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_ttfb_ms_low_bucket[1m]))",
+          "legendFormat": "TTFB P95 — LOW"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_ttfb_ms_medium_bucket[1m]))",
+          "legendFormat": "TTFB P95 — MEDIUM"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(travel_ttfb_ms_high_bucket[1m]))",
+          "legendFormat": "TTFB P95 — HIGH"
+        }
+      ]
+    },
+
+    {
+      "id": 232, "type": "timeseries",
+      "title": "Agent TTFT (Prometheus) vs VU Load",
+      "description": "Cross-validates k6 TTFB with the agent's internal TTFT metric from metrics.py. Should correlate closely.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(agent_time_to_first_token_seconds_bucket[1m]))",
+          "legendFormat": "Agent TTFT P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(agent_time_to_first_token_seconds_bucket[1m]))",
+          "legendFormat": "Agent TTFT P95"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 },
+      "id": 240, "title": "🤖 vLLM Backend — Queue Depth & GPU Pressure", "type": "row" },
+
+    {
+      "id": 241, "type": "timeseries",
+      "title": "vLLM Pending Requests (Queue Depth)",
+      "description": "Number of requests waiting in vLLM scheduler queue. High values = vLLM is the bottleneck.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 34 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 10 },
+            { "color": "red", "value": 20 }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vllm:num_requests_waiting{service=\"vllm-llm\"}",
+          "legendFormat": "LLM Queue Depth"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vllm:num_requests_running{service=\"vllm-llm\"}",
+          "legendFormat": "LLM Running"
+        }
+      ]
+    },
+
+    {
+      "id": 242, "type": "timeseries",
+      "title": "vLLM GPU KV Cache Utilization",
+      "description": "GPU KV cache fill percentage. >80% triggers preemption → latency spikes. Critical at high VU counts.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 34 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.6 },
+            { "color": "orange", "value": 0.8 },
+            { "color": "red", "value": 0.9 }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vllm:gpu_cache_usage_perc{service=\"vllm-llm\"}",
+          "legendFormat": "LLM KV Cache %"
+        }
+      ]
+    },
+
+    {
+      "id": 243, "type": "timeseries",
+      "title": "vLLM Token Throughput (Generated Tokens/s)",
+      "description": "Output token generation rate from vLLM. Plateaus when GPU is saturated.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 34 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(vllm:generation_tokens_total{service=\"vllm-llm\"}[1m])",
+          "legendFormat": "Generated Tokens/s"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(vllm:prompt_tokens_total{service=\"vllm-llm\"}[1m])",
+          "legendFormat": "Prompt Tokens/s"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 },
+      "id": 250, "title": "🧠 LangGraph — Node Performance Under Load", "type": "row" },
+
+    {
+      "id": 251, "type": "timeseries",
+      "title": "LangGraph Node Latency P95 — All Nodes",
+      "description": "Per-node execution time at P95 during load test. Identifies which node becomes the bottleneck.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "calcs": ["lastNotNull", "max"] } },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(agent_node_duration_seconds_bucket[1m]))",
+          "legendFormat": "P95 — {{node_name}}"
+        }
+      ]
+    },
+
+    {
+      "id": 252, "type": "timeseries",
+      "title": "LangGraph Iteration Count Distribution",
+      "description": "How many ReAct loop iterations are used per request. Increases under load due to complex prompts.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, rate(langgraph_iteration_count_bucket[5m]))",
+          "legendFormat": "Iterations P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(langgraph_iteration_count_bucket[5m]))",
+          "legendFormat": "Iterations P95"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 51 },
+      "id": 260, "title": "💾 Semantic Cache & RAG Performance Under Load", "type": "row" },
+
+    {
+      "id": 261, "type": "timeseries",
+      "title": "Semantic Cache Hit Rate vs VU Count",
+      "description": "Cache hit rate over time, overlaid with VU count. Shows how cache effectiveness changes as load increases.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "VUs" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "unit", "value": "short" }] }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(semantic_cache_requests_total{status=\"hit\"}[2m]) / rate(semantic_cache_requests_total[2m])",
+          "legendFormat": "Cache Hit Rate"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "k6_vus",
+          "legendFormat": "VUs"
+        }
+      ]
+    },
+
+    {
+      "id": 262, "type": "timeseries",
+      "title": "RAG Retrieval Latency P95 Under Load",
+      "description": "Qdrant hybrid retrieval (dense + BM25) latency during load test. Qdrant should remain low even at high VU.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(agent_rag_retrieval_duration_seconds_bucket[1m]))",
+          "legendFormat": "RAG P95 — {{collection}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, rate(agent_embedding_duration_seconds_bucket[1m]))",
+          "legendFormat": "Embedding P95"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 },
+      "id": 270, "title": "💰 Token Cost & Safeguard Events During Load", "type": "row" },
+
+    {
+      "id": 271, "type": "timeseries",
+      "title": "Token Usage Rate (Input + Output Tokens/s)",
+      "description": "Tokens consumed per second during load test. Helps extrapolate API costs at given concurrency levels.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(agent_token_usage_total{token_type=\"input\"}[1m])",
+          "legendFormat": "Input Tokens/s — Tier {{tier}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(agent_token_usage_total{token_type=\"output\"}[1m])",
+          "legendFormat": "Output Tokens/s — Tier {{tier}}"
+        }
+      ]
+    },
+
+    {
+      "id": 272, "type": "timeseries",
+      "title": "Safeguard Events — Forced Terminations & Duplicates",
+      "description": "Rate of safeguard trips: max_iterations, budget_depleted, duplicate_action, max_rework_cycles. Increases under heavy load.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(langgraph_forced_termination_total[2m])",
+          "legendFormat": "Forced Term — {{reason}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(langgraph_duplicate_tool_call_total[2m])",
+          "legendFormat": "Duplicate Tool Block — {{tool_name}}"
+        }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 69 },
+      "id": 280, "title": "📊 Request Volume by Complexity & Intent", "type": "row" },
+
+    {
+      "id": 281, "type": "timeseries",
+      "title": "Requests/s by Complexity Tier",
+      "description": "Breakdown of request throughput by complexity: LOW (40%), MEDIUM (40%), HIGH (20%) weighted distribution.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 70 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(travel_requests_low_total[1m])",
+          "legendFormat": "LOW complexity"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(travel_requests_medium_total[1m])",
+          "legendFormat": "MEDIUM complexity"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(travel_requests_high_total[1m])",
+          "legendFormat": "HIGH complexity"
+        }
+      ]
+    },
+
+    {
+      "id": 282, "type": "timeseries",
+      "title": "Complexity Classification Distribution (Agent-side)",
+      "description": "Agent's own routing classification vs VU load — verifies routing consistency under concurrency.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 70 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(agent_request_complexity_total[1m])",
+          "legendFormat": "{{complexity}} — {{intent_category}}"
+        }
+      ]
+    }
+
+  ],
+
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["k6", "load-test", "travel-assistant", "performance"],
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "🔫 k6 Travel Performance Test Dashboard",
+  "uid": "k6-travel-perf-test",
+  "version": 1
+}
+
