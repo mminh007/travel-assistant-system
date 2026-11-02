@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Cơ Chế Kiểm Soát Chất Lượng & A/B Testing Cho AI Agent (LLM Evaluation Framework)</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm 18mm 20mm 18mm;
+            @bottom-right {
+                content: counter(page);
+                font-size: 9pt;
+                color: #64748b;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background-color: #ffffff;
+            font-size: 10.5pt;
+        }
+
+        h1, h2, h3, h4 {
+            color: #0f172a;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        h1 {
+            font-size: 22pt;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 8px;
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: #1e40af;
+        }
+
+        .subtitle {
+            font-size: 12pt;
+            color: #475569;
+            margin-bottom: 24px;
+            font-style: italic;
+        }
+
+        .meta-box {
+            background-color: #f8fafc;
+            border-left: 4px solid #2563eb;
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            border-radius: 0 6px 6px 0;
+            font-size: 9.5pt;
+        }
+
+        .meta-box p {
+            margin: 4px 0;
+        }
+
+        h2 {
+            font-size: 15pt;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: #1e3a8a;
+            page-break-after: avoid;
+        }
+
+        h3 {
+            font-size: 12pt;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            color: #0369a1;
+            page-break-after: avoid;
+        }
+
+        p {
+            margin-top: 0;
+            margin-bottom: 10px;
+            text-align: justify;
+        }
+
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 12px;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            margin-bottom: 18px;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .card {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 16px;
+            page-break-inside: avoid;
+        }
+
+        .card-title {
+            font-weight: 700;
+            font-size: 11pt;
+            color: #1e3a8a;
+            margin-bottom: 6px;
+        }
+
+        .callout-warning {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 10px 14px;
+            margin: 14px 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+
+        .callout-success {
+            background-color: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 10px 14px;
+            margin: 14px 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+
+        .callout-danger {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            padding: 10px 14px;
+            margin: 14px 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+
+        code {
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            background-color: #f1f5f9;
+            color: #b91c1c;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 9pt;
+        }
+
+        pre {
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            font-size: 8.5pt;
+            line-height: 1.4;
+            overflow-x: auto;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 8pt;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-blue { background-color: #dbeafe; color: #1e40af; }
+        .badge-green { background-color: #dcfce7; color: #15803d; }
+        .badge-amber { background-color: #fef3c7; color: #b45309; }
+        .badge-red { background-color: #fee2e2; color: #b91c1c; }
+
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Kiểm Soát Chất Lượng & Đánh Giá Tự Động Cho AI Agent (LLM)</h1>
+    <div class="subtitle">Khung Đánh Giá Đa Tầng (Multi-Layered Evaluation), Đo Lường Hành Vi Thực Tế & A/B Testing Cho Hệ Thống Travel Booking Assistant</div>
+
+    <div class="meta-box">
+        <p><strong>Dự án:</strong> Travel Assistant System (LangGraph · ASP.NET Core · vLLM · 9Router)</p>
+        <p><strong>Chủ đề:</strong> Khắc phục hiện tượng Plausible Hallucination, xây dựng bộ đo lường tất định & kiểm nghiệm A/B Testing</p>
+        <p><strong>Ngày lập báo cáo:</strong> 02/11/2026</p>
+    </div>
+
+    <h2>1. Đặt Vấn Đề: Căn Bệnh "Plausible Hallucination"</h2>
+    <p>
+        Khi triển khai các mô hình ngôn ngữ lớn (LLM) vào các hệ thống hỗ trợ nghiệp vụ thực tế (như đặt vé máy bay, khách sạn, lập lịch trình), rủi ro lớn nhất không phải là mô hình không trả lời được, mà là <strong>mô hình trả lời rất trôi chảy, tự tin nhưng nội dung không chính xác hoặc không mang lại giá trị cho người dùng</strong>.
+    </p>
+
+    <div class="callout-danger">
+        <strong>⚠️ Hai Rủi Ro Lớn Nhất Trong Môi Trường Production:</strong>
+        <ol>
+            <li><strong>Dữ liệu ảo hóa (Inventory Hallucination):</strong> Agent hứa hẹn các tiện ích khách sạn không có thực, báo sai khoảng giá, hoặc đề xuất các chuyến bay có thời gian transit vô lý.</li>
+            <li><strong>Thiếu tính hành động (Low Task Actionability):</strong> Agent trả lời theo kiểu bách khoa toàn thư dài dòng, thiếu các nút liên kết đặt phòng cụ thể, không hỗ trợ khách chốt đơn được trên hệ thống.</li>
+        </ol>
+    </div>
+
+    <h3>Giới Hạn Của Cơ Chế Tự Đánh Giá (In-Graph LLM Evaluation) Hiện Tại</h3>
+    <p>
+        Hệ thống hiện tại đã tích hợp các node <code>fact_checker</code> và <code>evaluator_agent</code> trong LangGraph. Tuy nhiên, việc phụ thuộc hoàn toàn vào LLM-as-a-judge trong runtime có các điểm yếu cốt tử:
+    </p>
+    <ul>
+        <li><strong>Circular Blind Spots (Điểm mù chéo):</strong> Node Evaluator và Node Executor thường dùng chung một họ mô hình (hoặc chung manifest tư duy). Mô hình có xu hướng đồng tình với các giả định của chính nó (Sycophancy bias).</li>
+        <li><strong>Độ trễ và Chi phí (Latency & Token Tax):</strong> Phải tốn thêm từ 1 đến 2 lần gọi LLM suy luận chỉ để tự đánh giá, làm tăng TTFT (Time To First Token) và kéo dài tổng thời gian phản hồi thêm 1.5 – 3 giây.</li>
+        <li><strong>Thiếu dữ liệu thực tế (Zero Ground Truth):</strong> LLM không thể tự biết được khách hàng sau câu trả lời đó có ấn nút "Đặt Phòng" hay tức giận tắt ứng dụng.</li>
+    </ul>
+
+    <h2>2. Kiến Trúc Kiểm Soát Chất Lượng Đa Tầng (4 Trụ Cột)</h2>
+    <p>
+        Để kiểm soát chất lượng một cách toàn diện, chúng tôi thiết kế khung đánh giá kết hợp giữa <strong>Quy tắc mã nguồn tất định</strong>, <strong>Hành vi thực tế của khách hàng</strong>, <strong>Bộ kiểm thử ngoại tuyến tự động</strong> và <strong>Khung thử nghiệm A/B Testing</strong>.
+    </p>
+
+    <pre>
+┌────────────────────────────────────────────────────────────────────────┐
+│                        AI AGENT QUALITY CONTROL                        │
+└────────────────────────────────────────────────────────────────────────┘
+                                 │
+     ┌───────────────────────────┼───────────────────────────┐
+     ▼                           ▼                           ▼
+[TRỤ CỘT 1]                 [TRỤ CỘT 2]                 [TRỤ CỘT 3]
+Deterministic Code Evals    Online User Signals         Offline Golden Bench
+(Tất định, 0% LLM)         (Hành vi thực tế)           (CI/CD Gate trước khi deploy)
+ • Entity Grounding          • Booking Conversion Rate   • Ragas / G-Eval
+ • Constraint Compliance     • User Frustration Rate     • Ground Truth Dataset
+ • Tool Call Precision       • Drop-off & Re-query       • Regression Testing
+     │                           │                           │
+     └───────────────────────────┼───────────────────────────┘
+                                 ▼
+                           [TRỤ CỘT 4]
+                     A/B Testing Framework
+             (So sánh Prompt / Workflow / Model)
+              • Traffic Splitting (Redis / Gateway)
+              • Correlation ID & Variant Tagging
+              • Prometheus / Grafana Scorecard
+    </pre>
+
+    <div class="page-break"></div>
+
+    <h2>Chi Tiết Các Trụ Cột Đánh Giá</h2>
+
+    <div class="card">
+        <div class="card-title">📌 Trụ Cột 1: Đánh Giá Tất Định Bằng Mã Nguồn (Deterministic Verification - 0% LLM)</div>
+        <p>Được thực thi bằng logic code C#/Python thuần ngay sau khi Agent kết thúc lượt sinh token. Chi phí 0 token, thời gian xử lý &lt; 5ms.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Chỉ số (Metric)</th>
+                    <th>Cách Đo & Công Thức</th>
+                    <th>Ý Nghĩa Nghiệp Vụ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Entity Grounding Score</strong></td>
+                    <td><code>Khớp thực thể trích xuất / Thực thể thực tế trong DB</code></td>
+                    <td>Xác minh khách sạn, chuyến bay, giá phòng nêu ra có tồn tại thật trong cơ sở dữ liệu hay không.</td>
+                </tr>
+                <tr>
+                    <td><strong>Constraint Compliance Rate</strong></td>
+                    <td><code>Kiểm tra ngày nhận &lt; ngày trả; Giá &le; Ngân sách user</code></td>
+                    <td>Đo lường mức độ tuân thủ các điều kiện tiên quyết mà người dùng đã chỉ định trong prompt.</td>
+                </tr>
+                <tr>
+                    <td><strong>Wasted Tool Rate</strong></td>
+                    <td><code>Số Tool gọi ra nhưng kết quả bị bỏ qua / Tổng số Tool</code></td>
+                    <td>Phát hiện tình trạng Agent gọi tool lãng phí, làm chậm tốc độ stream của người dùng.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📌 Trụ Cột 2: Tín Hiệu Hành Vi Thực Tế Của Người Dùng (Online Behavioral Metrics)</div>
+        <p>Tín hiệu hành vi phản ánh chính xác nhất mức độ hữu ích của câu trả lời, không cần người dùng phải bấm sao đánh giá.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Chỉ số</th>
+                    <th>Cơ Chế Thu Thập</th>
+                    <th>Ngưỡng Cảnh Báo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Task Conversion Rate (TCR)</strong></td>
+                    <td>Gắn <code>session_id</code> với sự kiện user click <em>"Đặt phòng"</em> hoặc chuyển tới trang thanh toán Stripe.</td>
+                    <td>Nếu TCR &lt; 15% đối với các câu hỏi có ý định đặt phòng $\rightarrow$ Cảnh báo Prompt tư vấn kém hiệu quả.</td>
+                </tr>
+                <tr>
+                    <td><strong>User Frustration Rate</strong></td>
+                    <td>Phát hiện các từ khóa tiêu cực (<em>"sai rồi", "không phải", "tìm lại"</em>) hoặc nhập lại cùng câu hỏi trong vòng 60 giây.</td>
+                    <td>Tỷ lệ hỏi lại &gt; 12% phản ánh Agent đang trả lời không trúng ý người dùng.</td>
+                </tr>
+                <tr>
+                    <td><strong>Turn-to-Resolution (TTR)</strong></td>
+                    <td>Số lượng vòng hội thoại cần thiết để khách hàng chọn được một dịch vụ cụ thể.</td>
+                    <td>TTR tối ưu: 2 – 4 turns. Nếu kéo dài &gt; 7 turns phản ánh Agent vòng vo.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📌 Trụ Cột 3: Bộ Kiểm Thử Ngoại Tuyến & CI/CD Gate (Offline Benchmark Suite)</div>
+        <p>Bộ đánh giá bắt buộc phải chạy tự động trước khi một bản cập nhật prompt, model hay node LangGraph được đưa lên production.</p>
+        <ul>
+            <li><strong>Golden Dataset (100–200 câu hỏi chuẩn):</strong> Phân chia cân bằng giữa các câu hỏi dễ (FAQ), trung bình (lập lịch trình), phức tạp (ngân sách hạn hẹp), và bẫy ngoại biên (out-of-domain, injection).</li>
+            <li><strong>Chấm điểm chuẩn quốc tế (Ragas / DeepEval):</strong>
+                <ul>
+                    <li><code>Faithfulness (Độ trung thực):</code> Tỷ lệ các khẳng định được chứng minh trực tiếp từ dữ liệu trả về của Tool.</li>
+                    <li><code>Answer Relevance (Độ liên quan):</code> Mức độ bám sát trực diện vào mục tiêu người dùng yêu cầu.</li>
+                    <li><code>Language Anti-Drift:</code> Đảm bảo tỷ lệ chữ tiếng Trung trong phản hồi tiếng Việt/Anh bằng 0%.</li>
+                </ul>
+            </li>
+            <li><strong>Quality Gate:</strong> Tự động chặn lệnh Deploy nếu điểm <code>Faithfulness &lt; 0.90</code> hoặc tỷ lệ tuân thủ điều kiện <code>Constraint &lt; 95%</code>.</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>3. Thiết Kế Hệ Thống A/B Testing Cho AI Agent</h2>
+    <p>
+        Để kiểm nghiệm xem Prompt mới, Mô hình mới (ví dụ so sánh <strong>9Router GPT-4o</strong> vs <strong>vLLM Qwen2.5-AWQ</strong>), hoặc Kịch bản phân rã mới có tốt hơn hay không, hệ thống cần được trang bị luồng phân phối thử nghiệm chuẩn:
+    </p>
+
+    <pre>
+[User Query từ Website ASP.NET Core]
+                   │
+                   ▼
+       [Phân Phối Luồng Thử Nghiệm]  ── Hash(Session ID) % 100
+                   │
+        ┌──────────┴──────────┐
+   50% Traffic           50% Traffic
+        ▼                     ▼
+   [Variant A]           [Variant B]
+  (Baseline Prompt)     (Candidate Prompt / Model)
+        │                     │
+        └──────────┬──────────┘
+                   ▼
+[Gắn Nhãn Telemetry: variant=A / variant=B]
+  • Prometheus Metrics (TTFT, Chunks/s, Tokens, Chi phí)
+  • Langfuse Traces (Execution flow, Node Latencies)
+  • Database Web Logs (Click-through, Booking Conversion)
+                   │
+                   ▼
+     [Bảng So Sánh Quyết Định Thắng / Thua]
+    </pre>
+
+    <h3>Ma Trận Tiêu Chí Đánh Giá Quyết Định (A/B Test Scorecard)</h3>
+    <p>Một ứng viên (Variant B) chỉ được phép thay thế phiên bản cũ (Variant A) khi thỏa mãn toàn bộ các điều kiện trong ma trận sau:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Khía Cạnh Đánh Giá</th>
+                <th>Chỉ Số Đo Lường (Metrics)</th>
+                <th>Điều Kiện Chiến Thắng Của Variant B</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Chất lượng nghiệp vụ</strong></td>
+                <td>Tỷ lệ chuyển đổi đặt phòng (Conversion Rate)</td>
+                <td><strong>Tăng &ge; 5%</strong> so với Variant A (p-value &lt; 0.05).</td>
+            </tr>
+            <tr>
+                <td><strong>Độ chính xác dữ liệu</strong></td>
+                <td>Entity Grounding & Constraint Compliance</td>
+                <td><strong>&ge; 98%</strong>, không được có bất kỳ ca suy giảm độ chính xác nào.</td>
+            </tr>
+            <tr>
+                <td><strong>Độ trễ phản hồi</strong></td>
+                <td>P95 Time to First Token (TTFT)</td>
+                <td>Không được tăng quá <strong>10%</strong> so với bản cũ.</td>
+            </tr>
+            <tr>
+                <td><strong>Chi phí vận hành</strong></td>
+                <td>Chi phí ước tính / 1000 lượt chat ($ USD)</td>
+                <td><strong>Giảm hoặc tương đương</strong> chi phí của Variant A.</td>
+            </tr>
+            <tr>
+                <td><strong>Trải nghiệm tương tác</strong></td>
+                <td>User Frustration Rate (Hỏi lại / Thoát sớm)</td>
+                <td><strong>Giảm &ge; 10%</strong> so với Variant A.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>4. Lộ Trình Triển Khai Kỹ Thuật Cho Dự Án Booking</h2>
+
+    <div class="callout-success">
+        <strong>🚀 Kế Hoạch 3 Bước Tận Dụng Hạ Tầng Có Sẵn:</strong>
+        <ol>
+            <li>
+                <strong>Bước 1 — Post-Session Audit Worker (Tận dụng RabbitMQ hiện có):</strong>
+                Hiện tại sau mỗi phiên chat, hệ thống đã publish tin nhắn vào RabbitMQ cho <code>MemoryWorker</code>. Chúng ta có thể mở rộng worker này để chạy thêm bước kiểm tra đối soát chéo (Cross-Audit) giữa văn bản sinh ra với cơ sở dữ liệu khách sạn, tính <code>Grounding Score</code> và đẩy trực tiếp thành Prometheus metric mới <code>agent_conversation_quality_score</code>.
+            </li>
+            <li>
+                <strong>Bước 2 — Telemetry & Conversion Tracking Tại ASP.NET Core:</strong>
+                Trong SignalR <code>ChatHub.cs</code> và <code>BookingController.cs</code>, khi người dùng bấm tạo đơn đặt phòng hoặc thanh toán Stripe thành công, tự động gửi kèm <code>session_id</code> để lưu vết chuyển đổi thành công.
+            </li>
+            <li>
+                <strong>Bước 3 — Xây dựng Bộ Evals Tự Động Trong Thư Mục <code>agent/tests/evals/</code>:</strong>
+                Tận dụng ngân hàng 60 câu hỏi có sẵn tại <code>agent/load_tests/questions_db.json</code>, viết kịch bản Python tự động chấm điểm độ trung thực và tính tuân thủ của mô hình trước mỗi lần merge code.
+            </li>
+        </ol>
+    </div>
+
+</body>
+</html>
