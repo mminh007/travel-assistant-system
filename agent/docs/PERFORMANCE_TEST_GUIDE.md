@@ -1,41 +1,42 @@
-# 🚀 Hướng Dẫn Chạy Kiểm Thử Hiệu Năng & Khả Năng Chịu Tải
+# 🚀 Performance & Load Testing Execution Guide
 ## Travel Assistant System — Multi-Agent & Hybrid RAG Stack
 
-Tài liệu này cung cấp toàn bộ hướng dẫn, giải thích các kịch bản và **tổng hợp các câu lệnh chi tiết** để thực thi kiểm thử hiệu suất hệ thống từ Smoke test đến Step-up tải nặng 200 VUs trên cả hai giao thức: **HTTP SSE** và **gRPC Streaming**.
+This guide details execution procedures, test profiles, scenario descriptions, and **exact command lines** for benchmarking the system under load — ranging from quick smoke tests to high-concurrency step-up runs (up to 200–1000 Virtual Users) across two core streaming protocols: **HTTP SSE** and **gRPC Streaming**.
 
 ---
 
-## 📌 Mục Lục
-1. [Chuẩn Bị & Kiểm Tra Môi Trường](#1-chuẩn-bị--kiểm-tra-môi-trường)
-2. [Cấu Trúc Bộ Kiểm Thử & 2 Giao Thức (HTTP vs gRPC)](#2-cấu-trúc-bộ-kiểm-thử--2-giao-thức-http-vs-grpc)
-3. [Tổng Hợp Các Lệnh Chạy Test](#3-tổng-hợp-các-lệnh-chạy-test)
-   - [Kịch bản 1: Step-up Load Test (10 → 50 → 100 → 200 VUs) — Mục tiêu chính](#kịch-bản-1-step-up-load-test-10--50--100--200-vus--mục-tiêu-chính)
-   - [Kịch bản 2: Smoke Test (Kiểm tra nhanh 1-2 phút)](#kịch-bản-2-smoke-test-kiểm-tra-nhanh-1-2-phút)
-   - [Kịch bản 3: Soak Test (Chạy bền 30 phút ở 50 VUs)](#kịch-bản-3-soak-test-chạy-bền-30-phút-ở-50-vus)
-   - [Kịch bản 4: Spike Test (Bật tải đột ngột 200 VUs)](#kịch-bản-4-spike-test-bật-tải-đột-ngột-200-vus)
-   - [Kịch bản 5: Test riêng từng mức độ câu hỏi (Low / Medium / High)](#kịch-bản-5-test-riêng-từng-mức-độ-câu-hỏi-low--medium--high)
-4. [Theo Dõi Real-time Trên Dashboard](#4-theo-dõi-real-time-trên-dashboard)
-5. [Xem & Quản Lý Báo Cáo Hiệu Năng (HTML & JSON Reports)](#5-xem--quản-lý-báo-cáo-hiệu-năng-html--json-reports)
-6. [Xử Lý Sự Cố Thường Gặp (Troubleshooting)](#6-xử-lý-sự-cố-thường-gặp-troubleshooting)
+## 📌 Table of Contents
+1. [Environment Verification & Prerequisites](#1-environment-verification--prerequisites)
+2. [Test Suite Architecture & Dual Protocols (HTTP vs gRPC)](#2-test-suite-architecture--dual-protocols-http-vs-grpc)
+3. [Test Execution Commands](#3-test-execution-commands)
+   - [Scenario 1: Step-Up Load Test (10 → 50 → 100 → 200 VUs) — Core Baseline](#scenario-1-step-up-load-test-10--50--100--200-vus--core-baseline)
+   - [Scenario 2: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs) — Breaking Point](#scenario-2-high-scale-stress-test-300--500--700--1000-vus--breaking-point)
+   - [Scenario 3: Smoke Test (Fast 90s Verification)](#scenario-3-smoke-test-fast-90s-verification)
+   - [Scenario 4: Soak Test (30-Minute Endurance at 50 VUs)](#scenario-4-soak-test-30-minute-endurance-at-50-vus)
+   - [Scenario 5: Spike Test (Instantaneous Burst to 200 VUs)](#scenario-5-spike-test-instantaneous-burst-to-200-vus)
+   - [Scenario 6: Complexity-Isolated Testing (Low / Medium / High)](#scenario-6-complexity-isolated-testing-low--medium--high)
+4. [Real-Time Monitoring Dashboards](#4-real-time-monitoring-dashboards)
+5. [Performance Report Management (HTML & JSON Reports)](#5-performance-report-management-html--json-reports)
+6. [Troubleshooting & Known Bottlenecks](#6-troubleshooting--known-bottlenecks)
 
 ---
 
-## 1. Chuẩn Bị & Kiểm Tra Môi Trường
+## 1. Environment Verification & Prerequisites
 
-Mở **PowerShell** hoặc **Terminal** và di chuyển vào thư mục `agent`:
+Open **PowerShell** or **Terminal** and navigate to the `agent` root directory:
 
 ```powershell
 cd d:\proj\Booking\agent
 ```
 
-### Bước 1.1: Kiểm tra các container hạ tầng
-Đảm bảo tất cả các container hệ thống đang chạy (`Up`):
+### Step 1.1: Verify infrastructure containers
+Ensure all supporting infrastructure containers are healthy and running (`Up`):
 
 ```powershell
 docker ps
 ```
 
-Các container bắt buộc phải hoạt động:
+Mandatory operational containers:
 * `booking_api_server` (FastAPI REST & SSE — port 8080)
 * `booking_grpc_server` (gRPC Core Engine Streaming — port 50051)
 * `booking_prometheus` (Prometheus Time-series DB — port 9090)
@@ -44,77 +45,75 @@ Các container bắt buộc phải hoạt động:
 * `booking_qdrant_server` (Qdrant Vector DB — port 6333)
 * `booking_rabbitmq` (RabbitMQ Message Broker — port 5672)
 
-### Bước 1.2: Bật hệ thống nếu chưa chạy
-Nếu các container trên chưa bật, chạy lệnh sau để khởi động toàn bộ:
-
+### Step 1.2: Launch stack if not yet running
 ```powershell
 docker compose up -d
 ```
 
 ---
 
-## 2. Cấu Trúc Bộ Kiểm Thử & 2 Giao Thức (HTTP vs gRPC)
+## 2. Test Suite Architecture & Dual Protocols (HTTP vs gRPC)
 
-Bộ test nằm trọn vẹn trong thư mục `agent/load_tests/`:
+All performance testing assets reside in `agent/load_tests/`:
 
-* **`questions_db.json`**: Ngân hàng 60 câu hỏi du lịch thực tế, chia theo 3 mức độ:
-  * **LOW (20 câu)**: Câu hỏi FAQ, tìm khách sạn đơn giản (đi qua route tắt `direct_executor`).
-  * **MEDIUM (25 câu)**: Lập lịch trình 3-4 ngày, so sánh địa điểm (chạy qua `planner` + ReAct tool).
-  * **HIGH (15 câu)**: Lập kế hoạch ngân sách chi tiết, tour dài ngày xuyên Việt (duyệt toàn bộ đồ thị LangGraph và cơ chế Critic/Rework).
+* **`questions_db.json`**: Curated bank of 60 realistic travel queries divided across three complexity tiers:
+  * **LOW (20 questions)**: FAQ queries, direct hotel lookups (routed via `direct_executor_init` bypass).
+  * **MEDIUM (25 questions)**: 3-4 day itinerary planning, multi-attribute comparisons (routed via `planner` + ReAct tool loop).
+  * **HIGH (15 questions)**: Detailed multi-day budgets, cross-city regional tours (exercising full LangGraph recursion, tools, critic evaluation, and rework).
 
-* **Hai kịch bản kiểm thử song song:**
+* **Dual Test Runners:**
 
-| Thuộc tính | Luồng HTTP SSE (`travel_perf_test.js`) | Luồng gRPC Stream (`travel_grpc_perf_test.js`) |
+| Attribute | HTTP SSE (`travel_perf_test.js`) | gRPC Streaming (`travel_grpc_perf_test.js`) |
 | :--- | :--- | :--- |
-| **Kịch bản file** | `load_tests/travel_perf_test.js` | `load_tests/travel_grpc_perf_test.js` |
-| **Docker Service** | `k6_perf_test` | `k6_grpc_perf_test` |
-| **Giao thức** | HTTP/1.1 Server-Sent Events (SSE) | HTTP/2 gRPC Streaming |
-| **Target URL** | `http://agent_api:8080/api/chat/stream` | `agent_grpc:50051` (`StreamChat`) |
-| **Bảo mật** | Anonymous Token / User ID Header | ES256 AI Response Receipt Signature |
-| **Báo cáo xuất ra** | `reports/http_test_{datetime}.html` & `.json` | `reports/grpc_test_{datetime}.html` & `.json` |
+| **Script File** | `load_tests/travel_perf_test.js` | `load_tests/travel_grpc_perf_test.js` |
+| **Docker Compose Service** | `k6_perf_test` | `k6_grpc_perf_test` |
+| **Protocol** | HTTP/1.1 Server-Sent Events (SSE) | HTTP/2 gRPC Streaming (`StreamChat`) |
+| **Target Address** | `http://agent_api:8080/chat/stream` | `agent_grpc:50051` |
+| **Security Validation** | Anonymous Token / User ID Header | Cryptographic ES256 AI Response Receipt verification |
+| **Generated Output** | `reports/http_test_{datetime}.html` & `.json` | `reports/grpc_test_{datetime}.html` & `.json` |
 
 ---
 
-## 3. Tổng Hợp Các Lệnh Chạy Test
+## 3. Test Execution Commands
 
-> **Lưu ý quan trọng**: Tất cả câu lệnh bên dưới đều chạy tại thư mục `d:\proj\Booking\agent`.
+> **Important:** All commands must be run from the `d:\proj\Booking\agent` directory.
 
 ---
 
-### Kịch bản 1: Step-up Load Test (10 → 50 → 100 → 200 VUs) — Mục tiêu chính
+### Scenario 1: Step-Up Load Test (10 → 50 → 100 → 200 VUs) — Core Baseline
 
-Kịch bản chuẩn leo bậc thang qua 4 mức tải trong ~17 phút:
-* **00:00 – 03:00**: 10 VUs (Warm-up & xác lập Baseline)
-* **03:00 – 07:00**: 50 VUs (Mức tải người dùng bình thường)
-* **07:00 – 11:00**: 100 VUs (Tải cao — kiểm tra Continuous Batching của vLLM)
-* **11:00 – 15:00**: 200 VUs (Mức tải cực đại — đo ngưỡng bão hòa và hàng đợi)
-* **15:00 – 17:00**: Giảm dần về 0 VUs (Cool-down)
+Standard 4-stage staircase load test (~17 minutes total):
+* **00:00 – 03:00**: 10 VUs (Warm-up & baseline calibration)
+* **03:00 – 07:00**: 50 VUs (Normal expected user load)
+* **07:00 – 11:00**: 100 VUs (Heavy concurrency — stresses vLLM Continuous Batching)
+* **11:00 – 15:00**: 200 VUs (Peak saturation — tests scheduling queue limits)
+* **15:00 – 17:00**: Ramp down to 0 VUs (Cool-down)
 
-#### A. Chạy cho luồng HTTP SSE:
+#### A. Execute for HTTP SSE:
 ```powershell
-# Chế độ Unique (Ép GPU/LLM xử lý 100% mọi request — Khuyên dùng đo Stress Test):
+# Unique Cache Mode (Forces 100% LLM/GPU execution — recommended for stress testing):
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup -e CACHE_MODE=unique k6_perf_test
 
-# Chế độ Mixed (Mô phỏng 30% hit Semantic Cache trên Qdrant):
+# Mixed Cache Mode (Simulates real-world traffic with ~30% Semantic Cache hit rate):
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup -e CACHE_MODE=mixed k6_perf_test
 ```
 
-#### B. Chạy cho luồng gRPC Streaming:
+#### B. Execute for gRPC Streaming:
 ```powershell
-# Chế độ Unique qua gRPC:
+# Unique Mode via gRPC:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup -e CACHE_MODE=unique k6_grpc_perf_test
 
-# Chế độ Mixed qua gRPC:
+# Mixed Mode via gRPC:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup -e CACHE_MODE=mixed k6_grpc_perf_test
 ```
 
 ---
 
-### Kịch bản Mở Rộng: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs đồng thời)
+### Scenario 2: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs) — Breaking Point
 
-Dùng để đánh giá ngưỡng bão hòa cực hạn (System Breaking Point) của hạ tầng vLLM Continuous Batching, Redis checkpointer và Agent backend.
+Designed to identify the physical saturation threshold (breaking point) of vLLM continuous batching, GPU VRAM, Redis checkpointing, and agent concurrency.
 
-#### 1. Chạy bậc thang tải cao liên tục (300 → 500 → 700 → 1000 VUs trong ~18 phút):
+#### 1. Continuous high-scale ramp (300 → 500 → 700 → 1000 VUs over ~18 minutes):
 ```powershell
 # HTTP SSE:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup_heavy k6_perf_test
@@ -123,204 +122,185 @@ docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup_heavy k6_perf
 docker compose --profile perftest run --rm -e STAGE_PROFILE=stepup_heavy k6_grpc_perf_test
 ```
 
-#### 2. Chạy cô lập từng mức tải đồng thời cụ thể:
-* **Mức 300 users đồng thời (~6 phút):**
+#### 2. Isolated target VU tiers:
+* **300 Concurrent Users (~6 minutes):**
   ```powershell
-  # HTTP SSE:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_300 k6_perf_test
-  # gRPC:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_300 k6_grpc_perf_test
   ```
 
-* **Mức 500 users đồng thời (~7 phút):**
+* **500 Concurrent Users (~7 minutes):**
   ```powershell
-  # HTTP SSE:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_500 k6_perf_test
-  # gRPC:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_500 k6_grpc_perf_test
   ```
 
-* **Mức 700 users đồng thời (~8 phút):**
+* **700 Concurrent Users (~8 minutes):**
   ```powershell
-  # HTTP SSE:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_700 k6_perf_test
-  # gRPC:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_700 k6_grpc_perf_test
   ```
 
-* **Mức 1000 users đồng thời (~9 phút):**
+* **1000 Concurrent Users (~9 minutes):**
   ```powershell
-  # HTTP SSE:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_1000 k6_perf_test
-  # gRPC:
   docker compose --profile perftest run --rm -e STAGE_PROFILE=stress_1000 k6_grpc_perf_test
   ```
-*(Lưu ý: Bạn cũng có thể dùng cú pháp alias ngắn gọn `-e STAGE_PROFILE=300`, `-e STAGE_PROFILE=500`, `-e STAGE_PROFILE=700`, `-e STAGE_PROFILE=1000`)*
+*(Short aliases supported: `-e STAGE_PROFILE=300`, `-e STAGE_PROFILE=500`, `-e STAGE_PROFILE=700`, `-e STAGE_PROFILE=1000`)*
 
 ---
 
-### Kịch bản 2: Smoke Test (Kiểm tra nhanh 1-2 phút)
+### Scenario 3: Smoke Test (Fast 90s Verification)
 
-Dùng để xác nhận toàn bộ đường truyền và kết nối trước khi chạy bài test lớn (chạy 3 VUs trong 90 giây):
+Quick pipeline sanity check running 3 VUs for 90 seconds prior to larger test runs:
 
 ```powershell
-# Test nhanh HTTP SSE:
+# HTTP SSE:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=smoke k6_perf_test
 
-# Test nhanh gRPC Streaming:
+# gRPC Streaming:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=smoke k6_grpc_perf_test
 ```
 
 ---
 
-### Kịch bản 3: Soak Test (Chạy bền 30 phút ở 50 VUs)
+### Scenario 4: Soak Test (30-Minute Endurance at 50 VUs)
 
-Duy trì đều đặn 50 người dùng liên tục trong 30 phút. Mục đích phát hiện rò rỉ bộ nhớ (Memory Leak), tràn RAM Redis hoặc nghẽn hàng đợi RabbitMQ:
+Sustained load of 50 concurrent users over 30 minutes to detect memory leaks, Redis buffer bloat, or RabbitMQ queue starvation:
 
 ```powershell
-# Soak Test HTTP:
+# HTTP SSE:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=soak -e CACHE_MODE=mixed k6_perf_test
 
-# Soak Test gRPC:
+# gRPC Streaming:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=soak -e CACHE_MODE=mixed k6_grpc_perf_test
 ```
 
 ---
 
-### Kịch bản 4: Spike Test (Bật tải đột ngột 200 VUs)
+### Scenario 5: Spike Test (Instantaneous Burst to 200 VUs)
 
-Trong 10 giây đẩy vọt từ 0 lên 200 VUs, duy trì 3 phút rồi hạ tải:
+Rapidly surges from 0 to 200 VUs within 10 seconds, holds for 3 minutes, then cools down:
 
 ```powershell
-# Spike Test HTTP:
+# HTTP SSE:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=spike -e CACHE_MODE=unique k6_perf_test
 
-# Spike Test gRPC:
+# gRPC Streaming:
 docker compose --profile perftest run --rm -e STAGE_PROFILE=spike -e CACHE_MODE=unique k6_grpc_perf_test
 ```
 
 ---
 
-### Kịch bản 5: Test riêng từng mức độ câu hỏi (Low / Medium / High)
+### Scenario 6: Complexity-Isolated Testing (Low / Medium / High)
 
-Đo đạc cô lập để xem từng loại câu hỏi tiêu tốn thời gian bao lâu:
+Isolates execution to verify cost and latency characteristics by question difficulty:
 
-#### Với HTTP SSE:
+#### For HTTP SSE:
 ```powershell
-# 1. Chỉ test câu hỏi DỄ (FAQ, tìm khách sạn):
+# Low Complexity Only (FAQs, simple hotel queries):
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=low k6_perf_test
 
-# 2. Chỉ test câu hỏi TRUNG BÌNH (Lập lịch trình 3-4 ngày):
+# Medium Complexity Only (3-4 day itineraries):
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=medium k6_perf_test
 
-# 3. Chỉ test câu hỏi PHỨC TẠP (Ngân sách chi tiết, tour dài ngày):
+# High Complexity Only (Multi-city budgets, complex tours):
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=high k6_perf_test
 ```
 
-#### Với gRPC Streaming:
+#### For gRPC Streaming:
 ```powershell
-# 1. Chỉ test câu hỏi DỄ qua gRPC:
+# Low Complexity:
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=low k6_grpc_perf_test
 
-# 2. Chỉ test câu hỏi TRUNG BÌNH qua gRPC:
+# Medium Complexity:
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=medium k6_grpc_perf_test
 
-# 3. Chỉ test câu hỏi PHỨC TẠP qua gRPC:
+# High Complexity:
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=high k6_grpc_perf_test
 ```
 
 ---
 
-## 4. Theo Dõi Real-time Trên Dashboard
+## 4. Real-Time Monitoring Dashboards
 
-Trong khi terminal đang chạy lệnh kiểm thử, mở trình duyệt để quan sát các chỉ số thời gian thực:
+While test commands execute, monitor live metrics via web browsers:
 
-### 1. Grafana Dashboard
-* **Địa chỉ:** [`http://localhost:3001`](http://localhost:3001)
-* **Tài khoản mặc định:** `admin` / `admin`
-* **Các dashboard cần mở:**
-  * **`🔫 k6 Travel Performance Test Dashboard`** *(Khuyên dùng)*: Theo dõi bậc thang VU, Throughput (RPS), Latency P50/P95 theo 3 tầng câu hỏi, Hàng đợi vLLM và SSE/gRPC chunks/s.
-  * **`Booking LangGraph Multi-Agent & Hybrid RAG Observability`**: Xem độ trễ từng Node trong LangGraph (`planner`, `travel_react_agent`, `evaluator`), số vòng lặp và tỉ lệ Semantic Cache.
-  * **`vLLM Dashboard`**: Xem GPU KV Cache Usage %, số request đang pending, tốc độ sinh token (tok/s).
+### 1. Grafana Dashboards
+* **URL:** [`http://localhost:3001`](http://localhost:3001)
+* **Default Credentials:** `admin` / `admin`
+* **Key Dashboards:**
+  * **`🔫 k6 Travel Performance Test Dashboard`**: Live VU ramp, Request Rate (RPS), P50/P95 latencies split across 3 complexity tiers, vLLM waiting queue depth, and streaming chunk throughput.
+  * **`Booking LangGraph Multi-Agent & Hybrid RAG Observability`**: Individual node latency breakdowns (`planner`, `travel_react_agent`, `evaluator`), loop counts, and semantic cache hit rates.
+  * **`vLLM Dashboard`**: GPU KV-cache usage %, active vs queued requests, and generation speed (tokens/s).
 
 ### 2. Prometheus
-* **Địa chỉ:** [`http://localhost:9090`](http://localhost:9090)
-* Truy vấn nhanh các metric chính:
-  * `sse_active_streams` — Số lượng luồng kết nối SSE đồng thời.
-  * `grpc_active_streams` — Số lượng luồng kết nối gRPC đồng thời.
-  * `travel_e2e_ms_all` / `travel_grpc_e2e_ms_all` — Độ trễ tổng thể đo từ k6.
-  * `travel_grpc_receipt_rate` — Tỷ lệ stream gRPC có biên lai ký số AI Receipt hợp lệ.
-  * `vllm:num_requests_waiting` — Số lượng request bị ứ đọng chờ xử lý trên GPU.
+* **URL:** [`http://localhost:9090`](http://localhost:9090)
+* **Key Queries:**
+  * `sse_active_streams` — Active concurrent SSE streams.
+  * `grpc_active_streams` — Active concurrent gRPC streams.
+  * `travel_e2e_ms_all` / `travel_grpc_e2e_ms_all` — Client-perceived E2E duration from k6.
+  * `travel_grpc_receipt_rate` — Fraction of responses containing valid cryptographic receipts.
+  * `vllm:num_requests_waiting` — Requests queued waiting for GPU execution slots.
 
 ---
 
-## 5. Xem & Quản Lý Báo Cáo Hiệu Năng (HTML & JSON Reports)
+## 5. Performance Report Management (HTML & JSON Reports)
 
-Sau khi mỗi bài test hoàn thành, hệ thống sẽ **tự động lưu báo cáo vào thư mục riêng**:
+Upon test completion, standalone artifacts are automatically persisted to:
 📂 **`d:\proj\Booking\agent\load_tests\reports\`**
 
-### Quy chuẩn đặt tên file tự động:
-Mỗi lượt test sẽ sinh ra 1 cặp file `.html` (giao diện) và `.json` (dữ liệu thô) có gắn timestamp chính xác theo chuẩn `{protocol}_test_{datetime}`:
+### File Naming Convention:
+Each run outputs a matching pair of visual `.html` and raw `.json` files stamped with `{protocol}_test_{datetime}`:
 
 ```text
 agent/load_tests/reports/
-├── http_test_20261030_111500.html     <-- Báo cáo chi tiết HTTP theo thời gian chạy
-├── http_test_20261030_111500.json     <-- Dữ liệu JSON thô HTTP
-├── grpc_test_20261030_113000.html     <-- Báo cáo chi tiết gRPC theo thời gian chạy
-├── grpc_test_20261030_113000.json     <-- Dữ liệu JSON thô gRPC
-├── latest_http_test.html              <-- Bản copy nhanh lần test HTTP gần nhất
-├── latest_grpc_test.html              <-- Bản copy nhanh lần test gRPC gần nhất
+├── http_test_20261030_111500.html     <-- Detailed HTML report for HTTP run
+├── http_test_20261030_111500.json     <-- Raw client-side JSON metrics
+├── grpc_test_20261030_113000.html     <-- Detailed HTML report for gRPC run
+├── grpc_test_20261030_113000.json     <-- Raw client-side JSON metrics
+├── latest_http_test.html              <-- Quick alias to most recent HTTP report
+├── latest_grpc_test.html              <-- Quick alias to most recent gRPC report
 └── latest_http_test.json / latest_grpc_test.json
 ```
 
-*(Đồng thời hệ thống vẫn duy trì file `summary_report.html` và `summary_report.json` tại `agent/load_tests/` để đảm bảo tương thích ngược).*
+### 1. Interactive HTML Reports
+* Open directly in Chrome or Edge by double-clicking the target HTML file.
+* Includes KPI summary tiles, per-complexity SLA threshold checks (Passed/Failed), and percentile latency tables (P50, P90, P95, TTFT).
 
-### 1. Báo cáo giao diện trực quan HTML
-* **Cách mở:** Nhấp đúp chuột vào file HTML tương ứng trong thư mục `reports/` để mở trên trình duyệt Chrome/Edge.
-* **Nội dung bao gồm:**
-  * **Thẻ KPI:** Tổng Requests / Streams, Throughput, Tỷ lệ lỗi (Error Rate %), Tỷ lệ trúng cache / Tỷ lệ ký số AI Receipt, Tổng chunks nhận được.
-  * **Bảng phân tầng chi tiết độ trễ:** Thống kê P50, P90, P95 (SLA), Trung bình và TTFT P95 cho từng tier `Low`, `Medium`, `High`.
-  * **Bảng kiểm tra SLA (Thresholds):** Đánh giá PASSED / FAILED theo tiêu chuẩn cam kết.
+### 2. Full 360° Metrics Exporter (k6 Client + vLLM GPU + LangGraph System Metrics)
+To export a unified report combining client-side k6 numbers with server-side Prometheus metrics (GPU KV cache %, queue depth, node execution times, cost estimates):
 
-### 2. Dữ liệu thô JSON (Client-side metrics)
-* File `latest_http_test.json` / `latest_grpc_test.json` chứa các chỉ số đo đạc từ **phía Client (k6 runner)**: min, max, p50, p90, p95, p99, count, error rate, chunk count.
-* Dễ dàng import vào pandas / Python notebook hoặc Google Sheets để so sánh hiệu năng giữa HTTP và gRPC.
-
-### 3. Xuất Báo Cáo Toàn Diện 360° (Gộp k6 + vLLM GPU + LangGraph System Metrics)
-Nếu bạn cần một file JSON chứa **cả thông số Client-side (k6) lẫn toàn bộ thông số Server-side của vLLM và hệ thống** (GPU KV Cache %, Hàng đợi Waiting Queue, Tokens/sec, Độ trễ từng Node LangGraph, Safeguards) như trên Grafana Dashboard:
-
-Chạy script sau tại thư mục `agent`:
 ```powershell
-# Cho đợt test HTTP:
+# For HTTP SSE run:
 python load_tests/export_system_metrics.py --protocol http --minutes 20
 
-# Cho đợt test gRPC:
+# For gRPC run:
 python load_tests/export_system_metrics.py --protocol grpc --minutes 20
 ```
-*Script sẽ tự động truy vấn Prometheus và tạo ra file `reports/latest_{protocol}_full_metrics.json` tổng hợp toàn diện cả 2 nguồn.*
+This writes `reports/latest_{protocol}_full_metrics.json` merging both perspectives.
 
 ---
 
-## 6. Xử Lý Sự Cố Thường Gặp (Troubleshooting)
+## 6. Troubleshooting & Known Bottlenecks
 
-### Vấn đề 1: Xuất hiện `WARN Request Failed error="request timeout"` ở mức 100 – 200 VUs
-* **Giải thích:** Đây **không phải lỗi code**, mà là kết quả xác định **điểm bão hòa (Knee-point)** của GPU. Khi 200 requests nặng đồng thời dồn vào, vLLM xếp hàng xử lý vượt quá thời gian timeout (120s – 300s) khiến k6 tự ngắt kết nối.
-* **Kết luận cho báo cáo:** Ngưỡng phục vụ tối ưu của 1 GPU hiện tại là **10 – 50 concurrent users**, bắt đầu suy giảm từ **~80 – 100 users** và bão hòa ở **>120 users**.
+### Issue 1: `WARN Request Failed error="request timeout"` at 100–200 VUs
+* **Root Cause:** Not a code bug, but the physical **knee-point (saturation point)** of single-GPU inference. When 200 heavy queries converge, vLLM continuous batching queues exceed client timeouts (120s–300s).
+* **Capacity Benchmark:** A single RTX 3090 (24GB VRAM) running `Qwen2.5-3B-Instruct-AWQ` comfortably sustains **10–50 concurrent users**, shows scheduling queue growth at **~80–100 users**, and saturates at **>120 concurrent users**.
 
-### Vấn đề 2: Dừng khẩn cấp bài test đang chạy
-Nếu muốn dừng ngay lập tức bài test đang chạy trong terminal:
-* Bấm tổ hợp phím **`Ctrl + C`** trong cửa sổ terminal đang chạy k6.
-* Hoặc mở cửa sổ terminal mới và chạy:
+### Issue 2: Aborting an Active Run
+* Press **`Ctrl + C`** in the active terminal running k6.
+* Alternatively, run from another terminal:
   ```powershell
   docker compose --profile perftest down
   ```
 
-### Vấn đề 3: Kiểm tra log của Server khi có lỗi
-* **Xem log HTTP API Server:**
+### Issue 3: Reviewing Server Diagnostic Logs
+* **FastAPI Server Logs:**
   ```powershell
   docker logs booking_api_server --tail 50 -f
   ```
-* **Xem log gRPC Core Server:**
+* **gRPC Server Logs:**
   ```powershell
   docker logs booking_grpc_server --tail 50 -f
   ```

@@ -29,8 +29,8 @@
     <div class="container">
         <h1>📊 Báo Cáo Hiệu Năng & Khả Năng Chịu Tải (Performance Report)</h1>
         <div class="meta">
-            <div class="meta-item">⏱️ Thời gian test: <strong>10/30/2026, 04:41:25</strong></div>
-            <div class="meta-item">🎯 Profile kịch bản: <strong>stepup</strong></div>
+            <div class="meta-item">⏱️ Thời gian test: <strong>10/30/2026, 08:53:28</strong></div>
+            <div class="meta-item">🎯 Profile kịch bản: <strong>smoke</strong></div>
             <div class="meta-item">⚡ Cache Mode: <strong>unique</strong></div>
             <div class="meta-item">🌐 Endpoint: <strong>http://agent_api:8080</strong></div>
         </div>
@@ -38,15 +38,15 @@
         <div class="cards">
             <div class="card">
                 <div class="card-label">Tổng Requests</div>
-                <div class="card-val">396</div>
+                <div class="card-val">15</div>
             </div>
             <div class="card">
                 <div class="card-label">Throughput (RPS)</div>
-                <div class="card-val">0.38 <span style="font-size: 13px; font-weight: normal;">req/s</span></div>
+                <div class="card-val">0.13 <span style="font-size: 13px; font-weight: normal;">req/s</span></div>
             </div>
             <div class="card">
                 <div class="card-label">Tỷ Lệ Lỗi (Error Rate)</div>
-                <div class="card-val" style="color: #ef4444;">43.54%</div>
+                <div class="card-val" style="color: #ef4444;">100.00%</div>
             </div>
             <div class="card">
                 <div class="card-label">Semantic Cache Hit</div>
@@ -54,7 +54,7 @@
             </div>
             <div class="card">
                 <div class="card-label">Tổng Chunks SSE</div>
-                <div class="card-val">591</div>
+                <div class="card-val">1</div>
             </div>
         </div>
 
@@ -75,39 +75,39 @@
                 
         <tr>
             <td><strong>Low (Simple / FAQ / Quick Hotel)</strong></td>
-            <td style="text-align: center;">184</td>
-            <td style="text-align: right;">395.0 ms</td>
-            <td style="text-align: right;">299.98 s</td>
-            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
-            <td style="text-align: right;">86.29 s</td>
-            <td style="text-align: right;">15.5 ms</td>
+            <td style="text-align: center;">4</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
         </tr>
         <tr>
             <td><strong>Medium (Itinerary / Comparison)</strong></td>
-            <td style="text-align: center;">146</td>
-            <td style="text-align: right;">299.97 s</td>
-            <td style="text-align: right;">299.98 s</td>
-            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
-            <td style="text-align: right;">161.77 s</td>
-            <td style="text-align: right;">20.8 ms</td>
+            <td style="text-align: center;">9</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">18.29 s</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">54.87 s</td>
+            <td style="text-align: right;">10.16 s</td>
+            <td style="text-align: right;">34.8 ms</td>
         </tr>
         <tr>
             <td><strong>High (Complex / Multi-city / Budget)</strong></td>
-            <td style="text-align: center;">65</td>
-            <td style="text-align: right;">299.98 s</td>
-            <td style="text-align: right;">299.98 s</td>
-            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
-            <td style="text-align: right;">191.88 s</td>
-            <td style="text-align: right;">109.9 ms</td>
+            <td style="text-align: center;">1</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
         </tr>
         <tr>
             <td><strong>Total (All Queries Combined)</strong></td>
-            <td style="text-align: center;">396</td>
-            <td style="text-align: right;">681.5 ms</td>
-            <td style="text-align: right;">299.98 s</td>
-            <td style="text-align: right; color: #2563eb; font-weight: bold;">299.98 s</td>
-            <td style="text-align: right;">131.57 s</td>
-            <td style="text-align: right;">23.5 ms</td>
+            <td style="text-align: center;">15</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right;">0.0 ms</td>
+            <td style="text-align: right; color: #2563eb; font-weight: bold;">32.01 s</td>
+            <td style="text-align: right;">6.53 s</td>
+            <td style="text-align: right;">20.3 ms</td>
         </tr>
             </tbody>
         </table>
@@ -126,7 +126,7 @@
                 <tr>
                     <td><code>travel_e2e_ms_medium</code></td>
                     <td>p(50)<8000</td>
-                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
                 </tr>
                 <tr>
                     <td><code>travel_e2e_ms_medium</code></td>
@@ -134,34 +134,19 @@
                     <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
                 </tr>
                 <tr>
-                    <td><code>travel_ttfb_ms_high</code></td>
-                    <td>p(95)<10000</td>
+                    <td><code>travel_e2e_ms_all</code></td>
+                    <td>p(95)<40000</td>
                     <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
                 </tr>
                 <tr>
-                    <td><code>travel_ttfb_ms_medium</code></td>
-                    <td>p(95)<5000</td>
-                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
-                </tr>
-                <tr>
-                    <td><code>travel_error_rate</code></td>
-                    <td>rate<0.05</td>
+                    <td><code>http_req_failed</code></td>
+                    <td>rate<0.02</td>
                     <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
                 </tr>
                 <tr>
                     <td><code>travel_ttfb_ms_low</code></td>
                     <td>p(95)<2000</td>
                     <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
-                </tr>
-                <tr>
-                    <td><code>travel_e2e_ms_high</code></td>
-                    <td>p(95)<40000</td>
-                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
-                </tr>
-                <tr>
-                    <td><code>http_req_failed</code></td>
-                    <td>rate<0.02</td>
-                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
                 </tr>
                 <tr>
                     <td><code>travel_e2e_ms_low</code></td>
@@ -171,12 +156,27 @@
                 <tr>
                     <td><code>travel_e2e_ms_low</code></td>
                     <td>p(95)<8000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_e2e_ms_high</code></td>
+                    <td>p(95)<40000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_error_rate</code></td>
+                    <td>rate<0.05</td>
                     <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
                 </tr>
                 <tr>
-                    <td><code>travel_e2e_ms_all</code></td>
-                    <td>p(95)<40000</td>
-                    <td style="text-align: center;"><span class="badge fail">FAILED</span></td>
+                    <td><code>travel_ttfb_ms_medium</code></td>
+                    <td>p(95)<5000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><code>travel_ttfb_ms_high</code></td>
+                    <td>p(95)<10000</td>
+                    <td style="text-align: center;"><span class="badge pass">PASSED</span></td>
                 </tr>
             </tbody>
         </table>
