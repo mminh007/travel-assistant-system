@@ -1,4 +1,5 @@
 # app/graph/nodes/guardrail.py
+import hashlib
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -11,6 +12,27 @@ from app.core.logger import setup_app_logger
 from app.core.metrics import COMPLEXITY_DISTRIBUTION
 
 logger = setup_app_logger("CognitiveNodes")
+
+# Traffic split for A/B testing: 10% → model_b, 90% → model_a
+_AB_TRAFFIC_SPLIT = 0.10
+_AB_EXPERIMENT_NAME = "model_comparison_v1"
+
+
+def _assign_ab_variant(session_id: str, traffic_split: float = _AB_TRAFFIC_SPLIT) -> str:
+    """Deterministic A/B variant assignment based on session_id.
+
+    Uses MD5 hashing to ensure the same session always maps to the same variant.
+    This prevents users from seeing different model behaviors within the same session.
+
+    Args:
+        session_id: Unique session identifier (used as hash key)
+        traffic_split: Fraction (0.0-1.0) of traffic routed to model_b. Default 10%.
+
+    Returns:
+        "model_b" if session is in treatment group, "model_a" otherwise.
+    """
+    hash_val = int(hashlib.md5(session_id.encode("utf-8")).hexdigest(), 16)
+    return "model_b" if (hash_val % 100) < int(traffic_split * 100) else "model_a"
 
 
 async def node_input_guardrail(state: AgentState, config: RunnableConfig = None):
@@ -30,6 +52,11 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
         logger.info(f"    In Domain: [{decision.is_in_domain}] | Intent: {decision.intent_category.upper()} | Complexity: {decision.complexity.upper()}")
         logger.info(f"    Objective: {decision.objective}\n")
 
+        # Assign A/B variant once per session — deterministic hashing ensures consistency
+        session_id = state.get("session_id") or "unknown"
+        ab_variant = _assign_ab_variant(session_id)
+        logger.info(f"    A/B Variant: {ab_variant} (experiment={_AB_EXPERIMENT_NAME}, session={session_id[:8]}...)")
+
         if not decision.is_in_domain:
             COMPLEXITY_DISTRIBUTION.labels(complexity="low", intent_category="out_of_domain").inc()
             return {
@@ -38,6 +65,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
                 "complexity": "low",
                 "objective": "Decline request politely",
                 "detected_language": decision.detected_language,
+                "model_variant": ab_variant,
                 **update_token_usage(state, usage, node_name="input_guardrail")
             }
 
@@ -53,6 +81,7 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
             "detected_language": decision.detected_language,
             "intent_confidence": decision.confidence,
             "ambiguity_reason": decision.ambiguity_reason,
+            "model_variant": ab_variant,
             **update_token_usage(state, usage, node_name="input_guardrail")
         }
     except Exception as route_err:
@@ -61,5 +90,6 @@ async def node_input_guardrail(state: AgentState, config: RunnableConfig = None)
             "is_in_domain": True,
             "intent_category": "travel_faq",
             "complexity": "low",
-            "detected_language": "English"
+            "detected_language": "English",
+            "model_variant": _assign_ab_variant(state.get("session_id") or "unknown"),
         }

@@ -52,3 +52,20 @@ class AgentState(TypedDict):
 
     # ─── CACHING ───
     cache_hit: Optional[bool]
+
+    # ─── A/B TESTING & EVAL PIPELINE BRIDGE ───
+    # Set once by node_input_guardrail; deterministic per session_id.
+    # "model_a" = control group (majority traffic)
+    # "model_b" = treatment group (candidate model, ~10% traffic)
+    model_variant: Optional[str]
+
+    # True when rework limit reached but response still deficient.
+    # Signals human review required in Eval Pipeline dashboard.
+    forced_accept: Optional[bool]
+
+    # Eval scores from node_evaluator_agent — forwarded to Langfuse post-graph.
+    # Range: 1-10 integer (as per EvaluatorOutput schema)
+    tool_quality_score: Optional[int]
+    evidence_quality_score: Optional[int]
+    citation_quality_score: Optional[int]
+    freshness_score: Optional[int]

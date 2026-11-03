@@ -43,7 +43,8 @@ class EvaluatorOutput(BaseModel):
     actionable_advice: str = Field(description="Strict, actionable instructions for the executor or synthesis notes if passing.")
 
 class FactCheckResult(BaseModel):
-    is_consistent: bool = Field(description="True if the extracted findings are fully consistent with the raw tool observations. False if there are contradictions.")
-    consistency_score: float = Field(description="0.0 = completely contradictory, 1.0 = completely consistent")
-    contradictions: List[str] = Field(description="List of factual contradictions discovered, if any.")
-    ungrounded_claims: List[str] = Field(description="List of claims that are not grounded in the tool observations.")
+    is_consistent: Optional[bool] = Field(default=None, description="True if the extracted findings are fully consistent with the raw tool observations. False if contradictions exist. None if verification was not possible.")
+    consistency_score: Optional[float] = Field(default=None, description="0.0 = completely contradictory, 1.0 = completely consistent. None if no tool data was available to verify against.")
+    contradictions: List[str] = Field(default_factory=list, description="List of factual contradictions discovered, if any.")
+    ungrounded_claims: List[str] = Field(default_factory=list, description="List of claims that are not grounded in the tool observations.")
+    verification_status: str = Field(default="verified", description="'verified' = LLM ran check | 'no_tool_data' = no tool observations to check against | 'failed' = LLM error during check")

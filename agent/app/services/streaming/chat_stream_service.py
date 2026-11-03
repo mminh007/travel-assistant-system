@@ -24,6 +24,76 @@ from app.core.metrics import (
 
 logger_instance = logger.setup_app_logger("ChatStreamService")
 
+
+async def _emit_quality_scores_to_langfuse(
+    trace_id: str,
+    final_state: dict,
+) -> None:
+    """Emit eval scores from agent graph to Langfuse as named scores.
+
+    This runs fire-and-forget after the graph completes. Never blocks the streaming response.
+    Scores pushed:
+      - consistency_score   (0.0 – 1.0, from fact_checker node)
+      - contradiction_count (int, from fact_checker node)
+      - tool_quality        (1-10, from evaluator_agent node)
+      - evidence_quality    (1-10, from evaluator_agent node)
+      - citation_quality    (1-10, from evaluator_agent node)
+      - freshness           (1-10, from evaluator_agent node)
+      - forced_accept       (1.0 if rework limit reached with deficient response)
+    """
+    if not settings.langfuse.public_key:
+        return
+    try:
+        from langfuse import Langfuse
+        client = Langfuse(
+            host=settings.langfuse.host,
+            public_key=settings.langfuse.public_key,
+            secret_key=settings.langfuse.secret_key,
+        )
+        fact_result = final_state.get("fact_check_result") or {}
+        if fact_result.get("consistency_score") is not None:
+            client.score(
+                trace_id=trace_id,
+                name="consistency_score",
+                value=float(fact_result["consistency_score"]),
+                data_type="NUMERIC",
+                comment=fact_result.get("verification_status", "verified"),
+            )
+        if fact_result.get("contradictions"):
+            client.score(
+                trace_id=trace_id,
+                name="contradiction_count",
+                value=float(len(fact_result["contradictions"])),
+                data_type="NUMERIC",
+            )
+        for dim, label in [
+            ("tool_quality_score", "tool_quality"),
+            ("evidence_quality_score", "evidence_quality"),
+            ("citation_quality_score", "citation_quality"),
+            ("freshness_score", "freshness"),
+        ]:
+            val = final_state.get(dim)
+            if val is not None:
+                client.score(
+                    trace_id=trace_id,
+                    name=label,
+                    value=float(val),
+                    data_type="NUMERIC",
+                )
+        if final_state.get("forced_accept"):
+            client.score(
+                trace_id=trace_id,
+                name="forced_accept",
+                value=1.0,
+                data_type="NUMERIC",
+                comment="Response was deficient but accepted due to rework limit. Requires human review.",
+            )
+        client.flush()
+        logger_instance.info("[Langfuse] Eval scores emitted successfully.")
+    except Exception as e:
+        logger_instance.warning(f"[Langfuse Score Emit] Failed: {e}")
+
+
 class ChatStreamService:
     def __init__(self, bg_tasks: Optional[set] = None):
         self._bg_tasks = bg_tasks if bg_tasks is not None else set()
@@ -85,12 +155,19 @@ class ChatStreamService:
             "current_task_id": None,
         }
 
+        # Deterministic A/B variant assignment (same session always → same variant)
+        import hashlib as _hashlib
+        _ab_variant = "model_b" if (int(_hashlib.md5(session_id.encode()).hexdigest(), 16) % 100) < 10 else "model_a"
+
         trace_config = {
             "recursion_limit": 100,  # Prevent GRAPH_RECURSION_LIMIT on multi-task ReAct plans
             "metadata": {
-                "session_id": session_id, 
+                "session_id": session_id,
                 "user_id": user_id,
-                "source": source
+                "source": source,
+                # A/B experiment metadata — used by Eval Pipeline Repo for variant filtering
+                "experiment.variant": _ab_variant,
+                "experiment.name": "model_comparison_v1",
             },
             "configurable": {
                 "thread_id": f"{user_id}_{session_id}"
@@ -101,9 +178,13 @@ class ChatStreamService:
         langsmith_tracer = None
         callbacks = []
         if source == "http":
-            if getattr(settings, "LANGFUSE_PUBLIC_KEY", None):
+            if settings.langfuse.public_key:
                 try:
-                    langfuse_handler = CallbackHandler()
+                    langfuse_handler = CallbackHandler(
+                        host=settings.langfuse.host,
+                        public_key=settings.langfuse.public_key,
+                        secret_key=settings.langfuse.secret_key,
+                    )
                     callbacks.append(langfuse_handler)
                 except Exception as e:
                     logger_instance.warning(f"Failed to initialize Langfuse callback: {e}")
@@ -118,6 +199,7 @@ class ChatStreamService:
 
         is_anonymous = user_id.startswith("anon_")
         final_state_messages = []
+        final_graph_state = {}  # Populated from on_chain_end agent_graph event
         ai_full_response_text = ""
         resolved_domain = initial_state["current_domain"]
         stream_status = "completed"
@@ -142,7 +224,7 @@ class ChatStreamService:
         }
 
         async def run_graph_stream(graph_instance):
-            nonlocal ai_full_response_text, final_state_messages, resolved_domain, first_chunk_recorded, stream_status
+            nonlocal ai_full_response_text, final_state_messages, resolved_domain, first_chunk_recorded, stream_status, final_graph_state
             async for event in graph_instance.astream_events(initial_state, version="v2", config=trace_config):
                 if is_cancelled_callback and is_cancelled_callback():
                     stream_status = "cancelled"
@@ -199,6 +281,8 @@ class ChatStreamService:
                     output_payload = event["data"]["output"]
                     final_state_messages = output_payload["messages"]
                     resolved_domain = output_payload.get("current_domain", resolved_domain)
+                    # Capture full final state for Langfuse score emission after graph completes
+                    final_graph_state = output_payload
                     
                     if not ai_full_response_text and final_state_messages:
                         last_msg = final_state_messages[-1]
@@ -247,5 +331,13 @@ class ChatStreamService:
             if langfuse_handler:
                 try:
                     langfuse_handler.flush()
+                    # Emit eval scores to Langfuse asynchronously (fire-and-forget, never blocks response)
+                    _trace_id = getattr(langfuse_handler, "get_trace_id", lambda: None)()
+                    if _trace_id and final_graph_state:
+                        task = asyncio.create_task(
+                            _emit_quality_scores_to_langfuse(_trace_id, final_graph_state)
+                        )
+                        self._bg_tasks.add(task)
+                        task.add_done_callback(self._bg_tasks.discard)
                 except Exception:
                     pass

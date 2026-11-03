@@ -31,9 +31,15 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
     extracted_findings = state.get("extracted_findings", [])
 
     if not tool_observations:
-        logger.info("    No tool observations found. Skipping fact check.")
+        logger.info("    No tool observations found. consistency_score=None (unverifiable, not 1.0).")
         return {
-            "fact_check_result": {"is_consistent": True, "contradictions": [], "consistency_score": 1.0, "ungrounded_claims": []}
+            "fact_check_result": {
+                "is_consistent": None,
+                "contradictions": [],
+                "consistency_score": None,
+                "ungrounded_claims": [],
+                "verification_status": "no_tool_data"
+            }
         }
 
     raw_obs_str = json.dumps(tool_observations, ensure_ascii=False)
@@ -123,6 +129,7 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
     rework_limit_reached = new_rework_count >= max_rework
 
     effective_needs_rework = evaluation.needs_rework
+    _forced_accept = False  # Set True if rework limit reached with deficient response
     if effective_needs_rework and rework_limit_reached:
         logger.warning(
             f"    ⚠️ [REWORK LIMIT REACHED] Status is DEFICIENT, but rework limit reached (Cycle {new_rework_count}/{max_rework}). "
@@ -130,6 +137,8 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
         )
         effective_needs_rework = False
         evaluation.feedback = f"{evaluation.feedback} [Accepted: max rework cycles reached]"
+        # Flag for Langfuse: human review required — response was deficient but forced through
+        _forced_accept = True
 
     logger.info(f"    Status: {'✅ MET' if evaluation.objective_met else '❌ DEFICIENT'}")
     logger.info(f"    Scores: Tools={evaluation.tool_quality_score}, Evidence={evaluation.evidence_quality_score}, "
@@ -142,5 +151,11 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
         "evaluator_notes": evaluation.actionable_advice,
         "needs_rework": effective_needs_rework,
         "rework_count": new_rework_count,
+        # ─── EVAL PIPELINE BRIDGE: scores forwarded to Langfuse via chat_stream_service ───
+        "tool_quality_score": evaluation.tool_quality_score,
+        "evidence_quality_score": evaluation.evidence_quality_score,
+        "citation_quality_score": evaluation.citation_quality_score,
+        "freshness_score": evaluation.freshness_score,
+        "forced_accept": _forced_accept,
         **token_update
     }
