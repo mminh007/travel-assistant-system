@@ -1,5 +1,4 @@
 # docker-compose.tracing
-version: '3.8'
 
 services:
   langfuse_db:
@@ -46,5 +45,4 @@ volumes:
 
 networks:
   agent_network:
-    name: agent_network
-    driver: bridge
+    external: true
