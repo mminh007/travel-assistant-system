@@ -161,6 +161,24 @@ class GrpcSettings(BaseSettings):
     tls_key_path: str = ""
     tls_ca_cert_path: str = ""
 
+class LangfuseSettings(BaseSettings):
+    """Langfuse tracing configuration -- data bridge to Eval Pipeline Repo.
+
+    Set these env vars to enable Langfuse tracing:
+      LANGFUSE_HOST        = http://localhost:3000
+      LANGFUSE_PUBLIC_KEY  = pk-lf-...
+      LANGFUSE_SECRET_KEY  = sk-lf-...
+
+    The agent uses these keys to:
+      1. Send LangChain callback traces (automatic via CallbackHandler)
+      2. Push eval scores post-graph (consistency_score, eval dimensions, forced_accept)
+      3. Tag traces with model_variant for A/B filtering in Eval Repo
+    """
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="LANGFUSE_", extra="ignore")
+    host: str = "http://localhost:3000"
+    public_key: str = ""
+    secret_key: str = ""
+
 class Settings(BaseSettings):
     """Unified application configuration manager grouping domain-specific sub-models.
 
@@ -188,6 +206,7 @@ class Settings(BaseSettings):
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     node_limits: NodeTokenLimits = Field(default_factory=NodeTokenLimits)
     grpc: GrpcSettings = Field(default_factory=GrpcSettings)
+    langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     max_rework_cycles: int = 2  # Cap Critic/Evaluator rework loops per task (optimizing small 3B models)
     
 @lru_cache()
