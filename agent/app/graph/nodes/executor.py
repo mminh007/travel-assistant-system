@@ -145,6 +145,25 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
     if task_context:
         system_content += f"<current_task>\n{task_context}\n</current_task>\n\n"
 
+    # ─── REWORK DIRECTIVE INJECTION ───
+    # Bug fix: previously evaluator_notes were written to state but never read here,
+    # causing the rework loop to regenerate blindly without any corrective guidance.
+    # Now we surface the evaluator's actionable advice as a high-priority directive.
+    evaluator_notes = state.get("evaluator_notes", "")
+    rework_count = state.get("rework_count", 0)
+
+    if rework_count > 0 and evaluator_notes:
+        logger.info(f"    [Rework Cycle {rework_count}] Injecting evaluator directive into executor context.")
+        system_content += (
+            f"\n\n<evaluator_directive>\n"
+            f"\u26a0\ufe0f REWORK REQUIRED (Cycle {rework_count}). "
+            f"Your previous response was evaluated as DEFICIENT.\n"
+            f"Specific issues to fix: {evaluator_notes}\n"
+            f"You MUST address ALL of the above issues in your next response. "
+            f"Do not simply rephrase the previous answer.\n"
+            f"</evaluator_directive>\n"
+        )
+
     compiled_messages = [SystemMessage(content=system_content)]
     compiled_messages.extend(state["messages"])
     compiled_messages = _sanitize_orphaned_tool_calls(compiled_messages)

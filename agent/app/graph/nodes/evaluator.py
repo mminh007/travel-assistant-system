@@ -72,7 +72,7 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
 
         return {
             "fact_check_result": result.model_dump(),
-            "evaluator_feedback": feedback,
+            "fact_check_feedback": feedback,  # Dedicated field — does NOT overwrite evaluator_feedback
             **token_update
         }
     except Exception as e:
