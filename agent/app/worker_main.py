@@ -6,6 +6,7 @@ import aio_pika
 from app.core.settings import settings
 from app.services import MemoryWorker
 from app.services.background_tasks.hotel_sync_handler import process_hotel_sync_message
+from app.services.background_tasks.shadow_eval_worker import run_shadow_eval_worker
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container, _resolve_active_collections
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -117,7 +118,13 @@ async def main():
         )
         await hotel_queue.consume(process_hotel_sync_message)
 
-        logger.info("🎧 Both consumers active: [fact_extraction_queue] + [hotel_sync_queue]")
+        # ─── Consumer 3 (New): Shadow Eval (Sprint A) ───
+        # Runs fact_checker + evaluator_agent async on eval.shadow queue.
+        # Scores are forwarded to Langfuse by node_evaluator_agent's emit logic.
+        # Uses asyncio.create_task() to avoid blocking the main connection loop.
+        asyncio.create_task(run_shadow_eval_worker())
+
+        logger.info("🎧 Consumers active: [fact_extraction_queue] + [hotel_sync_queue] + [eval.shadow]\n")
         await asyncio.Future()
 
 if __name__ == "__main__":

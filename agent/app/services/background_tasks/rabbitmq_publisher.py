@@ -76,3 +76,87 @@ async def publish_extraction_task(user_id: str, session_id: str, target_rag_doma
             
     except Exception as e:
         logger.error(f"❌ [RabbitMQ Publisher Failure] Failed to marshal task parameters: {str(e)}\n")
+
+
+# ─── Shadow Eval Publisher (Sprint A) ───────────────────────────────────────
+# Publishes evaluation payload to the async shadow eval queue after each
+# hot-path response. Consumed by shadow_eval_worker running in agent-worker
+# Docker service. Skipped for complexity=low to reduce worker overhead.
+
+EVAL_SHADOW_QUEUE = "eval.shadow"
+EVAL_SHADOW_DLQ   = "eval_shadow_dlq"
+EVAL_SHADOW_DLX   = "dlx_eval_shadow_exchange"
+
+
+async def publish_shadow_eval(
+    session_id: str,
+    trace_id: str,
+    objective: str,
+    executor_output: str,
+    findings: list,
+    tool_observations: list,
+    complexity: str,
+) -> None:
+    """
+    Fire-and-forget publisher for async shadow evaluation.
+
+    Called from node_finding_extractor via asyncio.create_task() — does NOT
+    block the hot-path. If this fails, the error is logged but never raised,
+    ensuring shadow eval failure is always non-fatal to the user response.
+
+    Args:
+        session_id:        Graph session identifier (for Langfuse correlation).
+        trace_id:          Langfuse trace ID for score emission.
+        objective:         User's original travel objective.
+        executor_output:   Raw executor response text (result_summary).
+        findings:          Structured findings from node_finding_extractor.
+        tool_observations: Raw tool message contents (capped to avoid oversized payloads).
+        complexity:        Query complexity tier ('low' | 'medium' | 'high').
+    """
+    # Skip shadow eval for low-complexity queries — not worth worker overhead.
+    # Simple FAQ responses don't need fact-checking or quality scoring.
+    if complexity == "low":
+        logger.debug(f"[ShadowEval] Skipping for low-complexity query (session={session_id}).")
+        return
+
+    payload = {
+        "codename_process": "ShadowEvalProcess",
+        "session_id": session_id,
+        "trace_id": trace_id,
+        "objective": objective,
+        "executor_output": executor_output,
+        "findings": findings,
+        # Cap tool observations to avoid oversized payloads in the queue
+        "tool_observations": tool_observations[:10],
+    }
+
+    try:
+        connection = await get_connection()
+        channel = await connection.channel()
+        try:
+            # Declare DLX + DLQ for shadow eval queue
+            dlx = await channel.declare_exchange(EVAL_SHADOW_DLX, aio_pika.ExchangeType.DIRECT)
+            dlq = await channel.declare_queue(EVAL_SHADOW_DLQ, durable=True)
+            await dlq.bind(dlx, routing_key=EVAL_SHADOW_DLQ)
+
+            await channel.declare_queue(
+                EVAL_SHADOW_QUEUE,
+                durable=True,
+                arguments={
+                    "x-dead-letter-exchange": EVAL_SHADOW_DLX,
+                    "x-dead-letter-routing-key": EVAL_SHADOW_DLQ,
+                }
+            )
+            await channel.default_exchange.publish(
+                aio_pika.Message(
+                    body=json.dumps(payload, ensure_ascii=False).encode(),
+                    delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                ),
+                routing_key=EVAL_SHADOW_QUEUE,
+            )
+            logger.info(f"[ShadowEval] Published eval event — session={session_id} trace={trace_id}")
+        finally:
+            await channel.close()
+    except Exception as e:
+        # Non-critical: shadow eval failure must NEVER break the hot-path.
+        logger.error(f"[ShadowEval] Publish failed (non-fatal, session={session_id}): {e}")
