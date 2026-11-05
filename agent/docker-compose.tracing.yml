@@ -1,5 +1,5 @@
 # docker-compose.tracing
-
+name: agent_tracing
 services:
   langfuse_db:
     image: postgres:16-alpine
