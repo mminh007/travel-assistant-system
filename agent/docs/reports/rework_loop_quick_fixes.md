@@ -8,17 +8,16 @@
 
 ## Tổng Quan Vấn Đề
 
-| # | Vấn đề | Nguồn gốc | Mức độ ảnh hưởng | Fix được ngay? |
-|---|---|---|:---:|:---:|
-| 1 | Rework loop "mù" — không inject `evaluator_notes` | §3.2 arch report | 🔴 Cao | ✅ **Đã fix** |
-| 2 | `fact_check_feedback` bị overwrite | §3.3 arch report | 🟡 Trung bình | ✅ **Đã fix** |
-| 3 | Fact-checker chỉ verify nội lực (không verify thực tế) | §3.3 arch report | 🔴 Cao | ⚠️ Giới hạn — xem bên dưới |
-| 4 | Evaluator dùng LLM chấm điểm chính mình | §3.4 arch report | 🟡 Trung bình | ⚠️ Cải thiện được một phần |
-| 5 | `max_rework_cycles=2` không có fallback template | §4 eval doc | 🟡 Trung bình | ✅ Fix được ngay |
-| 6 | Không có deterministic checks trước LLM fact-checker | §5.6 arch report | 🟢 Low | ✅ Fix được ngay |
+| #   | Vấn đề                                                                                                       | Nguồn gốc                                                           |     Mức độ ảnh hưởng      |      Fix được ngay?       |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | :-----------------------: | :-----------------------: |
+| 1   | Rework loop "mù" — không inject `evaluator_notes`                                                            |  ["§3.2 docs/architecture_evaluation_report_051126.md"](../../../docs/architecture_evaluation_report_051126.md ) |           🔴 Cao           |       ✅ **Đã fix**        |
+| 2   | `fact_check_feedback` bị overwrite                                                                           | ["§3.3 docs/architecture_evaluation_report_051126.md"](../../../docs/architecture_evaluation_report_051126.md )  |       🟡 Trung bình        |       ✅ **Đã fix**        |
+| 3   | Fact-checker chỉ verify nội lực (không verify thực tế)                                                       | ["§3.3 docs/architecture_evaluation_report_051126.md"](../../../docs/architecture_evaluation_report_051126.md ) |           🔴 Cao           | ⚠️ Giới hạn — xem bên dưới |
+| 4   | Evaluator dùng LLM chấm điểm chính mình                                                                      | ["§3.4 docs/architecture_evaluation_report_051126.md"](../../../docs/architecture_evaluation_report_051126.md )                                                        | ⚠️ Cải thiện được một phần |
+| 5   | `max_rework_cycles=2` không có fallback template                                                             | ["§4 docs/llm_evaluation_and_guardrails.md"](../../../docs/llm_evaluation_and_guardrails.md )            |       🟡 Trung bình        |      ✅ Fix được ngay      |
+| 6   | Không có deterministic checks trước LLM fact-checker                                                         | ["§5.6 docs/architecture_evaluation_report_051126.md"](../../../docs/architecture_evaluation_report_051126.md )  |           🟢 Low           |      ✅ Fix được ngay      |
 
 ---
-
 ## ✅ Có Thể Fix Ngay (Không Ảnh Hưởng System)
 
 ### Fix A — Fallback Template Khi Hết Rework Cycles (Priority: 🔴)
