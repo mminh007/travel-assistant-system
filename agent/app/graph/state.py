@@ -38,8 +38,9 @@ class AgentState(TypedDict):
     rework_count: int            # Tracks Critic→Reflection rework cycles to enforce Max Rework
 
     # ─── EVALUATION MEMORY ───
-    evaluator_feedback: Optional[str]
-    evaluator_notes: Optional[str]
+    evaluator_feedback: Optional[str]    # Set by node_evaluator_agent — high-level feedback on response quality
+    fact_check_feedback: Optional[str]   # Set by node_fact_checker — factual consistency feedback (separate field to prevent overwrite)
+    evaluator_notes: Optional[str]       # Actionable rework directives from node_evaluator_agent, injected into next executor run
     needs_rework: Optional[bool]
     fact_check_result: Optional[Dict[str, Any]]
     final_answer: Optional[str]
