@@ -35,13 +35,18 @@ class AgentState(TypedDict):
     iteration_count: int         # Tracks graph cycles to enforce Max Iterations
     tool_call_count: int         # Tracks total tools invoked to enforce Budget Limits
     action_history: List[str]    # Records hashed tool calls to prevent Duplicate Actions
-    rework_count: int            # Tracks Critic→Reflection rework cycles to enforce Max Rework
+    # rework_count removed in Sprint A — rework loop eliminated.
+    # Evaluation is now async (shadow_eval_worker). output_guardrail allows max 1 re-ask.
 
-    # ─── EVALUATION MEMORY ───
-    evaluator_feedback: Optional[str]    # Set by node_evaluator_agent — high-level feedback on response quality
-    fact_check_feedback: Optional[str]   # Set by node_fact_checker — factual consistency feedback (separate field to prevent overwrite)
-    evaluator_notes: Optional[str]       # Actionable rework directives from node_evaluator_agent, injected into next executor run
-    needs_rework: Optional[bool]
+    # ─── PHASE 2: OUTPUT GUARDRAIL STATE (Sprint A) ───
+    guardrail_passed: Optional[bool]  # Set by node_output_guardrail; True = pass, False = re-ask
+    reask_count: int                  # Tracks re-ask attempts; hard cap at 1 (not a rework loop)
+
+    # ─── EVALUATION MEMORY (async shadow eval — scores from background worker) ───
+    evaluator_feedback: Optional[str]    # Set by shadow_eval_worker — high-level feedback on response quality
+    fact_check_feedback: Optional[str]   # Set by shadow_eval_worker — factual consistency feedback
+    evaluator_notes: Optional[str]       # Actionable directives from evaluator (not used in hot-path post Sprint A)
+    # needs_rework removed in Sprint A — rework routing eliminated.
     fact_check_result: Optional[Dict[str, Any]]
     final_answer: Optional[str]
 
@@ -60,13 +65,15 @@ class AgentState(TypedDict):
     # "model_b" = treatment group (candidate model, ~10% traffic)
     model_variant: Optional[str]
 
-    # True when rework limit reached but response still deficient.
-    # Signals human review required in Eval Pipeline dashboard.
-    forced_accept: Optional[bool]
+    # forced_accept removed in Sprint A — rework loop eliminated.
+    # human review is now signalled via Langfuse alert on low eval scores.
 
-    # Eval scores from node_evaluator_agent — forwarded to Langfuse post-graph.
+    # Eval scores from shadow_eval_worker — forwarded to Langfuse post-evaluation.
     # Range: 1-10 integer (as per EvaluatorOutput schema)
     tool_quality_score: Optional[int]
     evidence_quality_score: Optional[int]
     citation_quality_score: Optional[int]
     freshness_score: Optional[int]
+
+    # Langfuse trace correlation ID — set by chat_stream_service, used by shadow_eval_worker.
+    langfuse_trace_id: Optional[str]

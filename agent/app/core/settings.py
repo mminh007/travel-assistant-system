@@ -208,6 +208,10 @@ class Settings(BaseSettings):
     grpc: GrpcSettings = Field(default_factory=GrpcSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     max_rework_cycles: int = 2  # Cap Critic/Evaluator rework loops per task (optimizing small 3B models)
+    # Sprint A: output guardrail strategy. 'regex' = fast/no-GPU default.
+    # Switch to 'classifier' when GPU infrastructure is available.
+    # classifier mode requires: pip install guardrails-ai guardrails-hub
+    guardrail_mode: str = "regex"  # 'regex' | 'classifier'
     
 @lru_cache()
 def get_settings() -> Settings:

@@ -75,9 +75,22 @@ async def node_final_synthesizer(state: AgentState, config: RunnableConfig = Non
     GRAPH_ITERATIONS.labels(domain=state.get("current_domain", "general_memory")).observe(total_iterations)
     ITERATIONS_BY_COMPLEXITY.labels(complexity=complexity).observe(total_iterations)
     TOOL_CALLS_BY_COMPLEXITY.labels(complexity=complexity).observe(state.get("tool_call_count", 0))
-    REWORK_CYCLES_BY_COMPLEXITY.labels(complexity=complexity).observe(state.get("rework_count", 0))
+    # Sprint A: rework_count replaced by reask_count (max 1 re-ask, not a rework loop)
+    REWORK_CYCLES_BY_COMPLEXITY.labels(complexity=complexity).observe(state.get("reask_count", 0))
 
     logger.info("    Process Complete. Handshake ready.\n\n")
+
+    # Sprint A: Append disclaimer footer.
+    # Since evaluation is now async (shadow eval worker), users receive responses
+    # immediately. This disclaimer ensures transparency about AI-generated content.
+    _DISCLAIMER = (
+        "\n\n---\n"
+        "*\u26a0\ufe0f This response is AI-generated and may contain inaccuracies. "
+        "Please verify critical information (prices, availability, travel requirements) "
+        "independently before making decisions.*"
+    )
+    if final_response and hasattr(final_response, "content") and isinstance(final_response.content, str):
+        final_response.content = final_response.content + _DISCLAIMER
 
     return {
         "messages": [final_response],
