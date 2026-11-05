@@ -16,6 +16,7 @@ from app.graph.nodes import (
     node_support_agent,
     node_clarification_agent,
 )
+from app.graph.nodes.output_guardrail import node_output_guardrail, route_from_output_guardrail
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from app.mcp.mcp_client import get_mcp_tools, DynamicMcpClientManager
@@ -189,10 +190,10 @@ def build_workflow(mcp_tools: list):
     workflow.add_node("direct_executor_init", node_direct_executor_init)
     workflow.add_node("task_manager", node_task_manager)
     workflow.add_node("finding_extractor", node_finding_extractor)
+    workflow.add_node("output_guardrail", node_output_guardrail)  # Sprint A: online hot-path guard
     workflow.add_node("final_synthesizer", node_final_synthesizer)
     workflow.add_node("support_agent", node_support_agent)
     workflow.add_node("clarification_agent", node_clarification_agent)
-    # NOTE: output_guardrail node will be added in feat/guardrails-ai-output-node.
     # NOTE: fact_checker + evaluator_agent are now async shadow eval (shadow_eval_worker.py).
 
     workflow.set_entry_point("input_guardrail")
@@ -225,9 +226,17 @@ def build_workflow(mcp_tools: list):
     workflow.add_edge("action_tracker", "tools")
     workflow.add_edge("tools", "travel_react_agent")
 
-    # finding_extractor → task_manager (direct edge).
-    # output_guardrail will be inserted between these in feat/guardrails-ai-output-node.
-    workflow.add_edge("finding_extractor", "task_manager")
+    # finding_extractor → output_guardrail → (pass) task_manager
+    #                                       → (reask) travel_react_agent (max 1 re-ask)
+    workflow.add_edge("finding_extractor", "output_guardrail")
+    workflow.add_conditional_edges(
+        "output_guardrail",
+        route_from_output_guardrail,
+        {
+            "pass":  "task_manager",
+            "reask": "travel_react_agent",
+        }
+    )
 
     workflow.add_conditional_edges(
         "task_manager",

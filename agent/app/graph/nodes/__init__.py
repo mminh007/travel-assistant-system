@@ -23,8 +23,9 @@ from app.graph.nodes.executor    import (
     node_support_agent,
     node_clarification_agent,
 )
-from app.graph.nodes.extractor   import node_finding_extractor
-from app.graph.nodes.synthesizer import node_final_synthesizer, node_task_manager
+from app.graph.nodes.extractor         import node_finding_extractor
+from app.graph.nodes.output_guardrail  import node_output_guardrail
+from app.graph.nodes.synthesizer       import node_final_synthesizer, node_task_manager
 
 # node_fact_checker and node_evaluator_agent are intentionally NOT exported here.
 # They are called directly by shadow_eval_worker as plain async functions,
@@ -38,6 +39,7 @@ __all__ = [
     "node_support_agent",
     "node_clarification_agent",
     "node_finding_extractor",
+    "node_output_guardrail",
     "node_final_synthesizer",
     "node_task_manager",
 ]
