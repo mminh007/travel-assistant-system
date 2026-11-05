@@ -1,5 +1,7 @@
 # app/graph/nodes/evaluator.py
 import json
+import re
+from datetime import date
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -15,11 +17,92 @@ logger = setup_app_logger("CognitiveNodes")
 _MAX_EVAL_PAYLOAD_CHARS = 4000
 _MAX_FC_OBSERVATION_CHARS = 4000
 
+# ─── Fix A: Fallback template khi forced_accept=True ───
+# Thay vì trả raw deficient response ra user, wrap trong disclaimer an toàn.
+_FORCED_ACCEPT_FALLBACK_TEMPLATE = (
+    "Tôi đã cố gắng thu thập thông tin cho yêu cầu của bạn, "
+    "nhưng chưa thể xác nhận đầy đủ độ chính xác sau nhiều lần kiểm tra.\n"
+    "Dưới đây là những gì tôi tìm được — vui lòng kiểm tra lại trước khi quyết định:\n\n"
+    "{best_effort_content}"
+)
+
+# ─── Fix B: Scoring rubric cứng cho evaluator ───
+# Thay thế chấm điểm cảm tính bằng định nghĩa rõ ràng → scores nhất quán
+# hơn giữa các runs, có giá trị baseline cho Langfuse trend analysis.
+_SCORING_RUBRIC = """
+SCORING RUBRIC — Use these exact definitions, NOT personal intuition:
+
+tool_quality_score (1-10):
+  10 = All needed tools called; results complete and directly relevant
+   7 = Most tools called; minor gaps in returned data
+   4 = Missing key tool calls; significant data gaps
+   1 = No relevant tools called at all
+
+evidence_quality_score (1-10):
+  10 = Every claim backed by a concrete tool observation (price/date/name cited)
+   7 = Most claims backed; minor unsupported assertions present
+   4 = Many claims ungrounded or vague
+   1 = Pure hallucination; no tool evidence used
+
+citation_quality_score (1-10):
+  10 = Sources explicitly named for all facts (hotel name, URL, tool ID)
+   7 = Sources named for key facts; minor gaps
+   4 = Sources rarely mentioned
+   1 = No citations at all
+
+freshness_score (1-10):
+  10 = All data retrieved live from tools in this exact session
+   7 = Mix of live tool data and known/cached facts
+   4 = Mostly parametric memory; few live tool calls made
+   1 = Entirely from parametric memory; no retrieval performed
+"""
+
+
+# ─── Fix C: Deterministic pre-checks (Tầng 1 — <1ms, zero LLM cost) ───
+def _run_deterministic_checks(findings: list) -> list[str]:
+    """
+    Kiểm tra nhanh không cần LLM trước khi gọi fact-checker.
+    Phát hiện các lỗi rõ ràng: giá âm, ngày không hợp lệ, ngày quá khứ cho booking.
+    Returns list of violation strings — rỗng = pass.
+    """
+    violations = []
+    today = date.today()
+
+    for f in findings:
+        content = f.get("content", "") if isinstance(f, dict) else str(f)
+
+        # Check 1: Giá âm hoặc bằng 0
+        prices = re.findall(r'([\d][\d,\.]+)\s*(?:VND|USD|đ|\$|vnđ)', content, re.IGNORECASE)
+        for price_str in prices:
+            try:
+                price_val = float(price_str.replace(",", "").replace(".", ""))
+                if price_val <= 0:
+                    violations.append(f"Invalid price <= 0: '{price_str}'")
+            except ValueError:
+                pass
+
+        # Check 2: Ngày quá khứ trong context booking (định dạng dd/mm/yyyy hoặc dd-mm-yyyy)
+        date_matches = re.findall(r'\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})\b', content)
+        for d, m, y in date_matches:
+            try:
+                parsed_date = date(int(y), int(m), int(d))
+                if parsed_date < today:
+                    violations.append(f"Past date found (may be invalid for booking): {d}/{m}/{y}")
+            except ValueError:
+                violations.append(f"Invalid date format detected: {d}/{m}/{y}")
+
+    return violations
+
 
 async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
     """
     Node: FACT_CHECKER.
     Compares extracted_findings with raw tool observations to detect hallucinations.
+
+    Pipeline:
+      [Fix C] Tầng 1 — Deterministic checks (<1ms, zero LLM cost)
+              ↓
+              Tầng 4 — LLM consistency check (Tier-1, only if Tầng 1 passes)
     """
     logger.info("==> [PROCESS] FACT_CHECKER Verifying factual consistency...")
 
@@ -30,16 +113,27 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
 
     extracted_findings = state.get("extracted_findings", [])
 
+    # ─── Fix C: Tầng 1 — Deterministic pre-checks ───
+    # Chạy trước LLM call để bắt lỗi rõ ràng (giá âm, ngày không hợp lệ).
+    deterministic_issues = _run_deterministic_checks(extracted_findings)
+    if deterministic_issues:
+        logger.warning(f"⚠️ [DETERMINISTIC CHECK] {len(deterministic_issues)} issue(s) found: {deterministic_issues}")
+    else:
+        logger.info("    [DETERMINISTIC CHECK] Passed — no obvious price/date violations.")
+
     if not tool_observations:
         logger.info("    No tool observations found. consistency_score=None (unverifiable, not 1.0).")
+        # Vẫn ghi lại deterministic issues nếu có, dù không có tool data để so sánh
+        det_feedback = f"[Deterministic] Issues: {'; '.join(deterministic_issues)}" if deterministic_issues else ""
         return {
             "fact_check_result": {
                 "is_consistent": None,
-                "contradictions": [],
+                "contradictions": deterministic_issues,
                 "consistency_score": None,
                 "ungrounded_claims": [],
                 "verification_status": "no_tool_data"
-            }
+            },
+            "fact_check_feedback": det_feedback,
         }
 
     raw_obs_str = json.dumps(tool_observations, ensure_ascii=False)
@@ -48,27 +142,35 @@ async def node_fact_checker(state: AgentState, config: RunnableConfig = None):
 
     check_prompt = f"""
     You are a Fact Verification engine.
-    
+
     TOOL RESULTS (Ground Truth):
     {raw_obs_str}
-    
+
     EXECUTOR CLAIMS (to verify):
     {json.dumps(extracted_findings, ensure_ascii=False)}
-    
+
     Task: Find any contradictions between executor claims and tool results.
     Focus on: prices, dates, names, quantities, availability status.
     """
 
     try:
         structured_checker = get_structured_llm(1, FactCheckResult, config)
-        result, usage = await invoke_llm_with_limit(1, structured_checker, [HumanMessage(content=check_prompt)], config, max_tokens_override=settings.node_limits.fact_checker, node_name="fact_checker")
+        result, usage = await invoke_llm_with_limit(
+            1, structured_checker, [HumanMessage(content=check_prompt)],
+            config, max_tokens_override=settings.node_limits.fact_checker, node_name="fact_checker"
+        )
 
         if not result.is_consistent:
             logger.warning(f"⚠️ [FACT CHECK] Contradictions detected: {result.contradictions}")
 
         token_update = update_token_usage(state, usage, node_name="fact_checker")
 
-        feedback = f"[Fact Check] Consistency: {result.consistency_score:.2f}. {'; '.join(result.contradictions)}" if result.contradictions else ""
+        # Merge deterministic issues + LLM-detected contradictions vào feedback
+        all_issues = deterministic_issues + (result.contradictions or [])
+        feedback = (
+            f"[Fact Check] Consistency: {result.consistency_score:.2f}. {'; '.join(all_issues)}"
+            if all_issues else ""
+        )
 
         return {
             "fact_check_result": result.model_dump(),
@@ -96,12 +198,16 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
     action_history = state.get("action_history", [])
     current_rework_count = state.get("rework_count", 0)
 
+    # ─── Fix B: Inject scoring rubric vào prompt ───
+    # Thay thế chấm điểm cảm tính → định nghĩa cứng từng mức 1/4/7/10
+    # giúp scores nhất quán giữa các runs và có giá trị baseline cho Langfuse.
     evaluation_prompt = (
         f"You are the EVALUATOR_AGENT.\n"
+        f"{_SCORING_RUBRIC}\n"
         f"MASTER OBJECTIVE: {objective}\n\n"
         f"Critically analyze if the Executor fulfilled the objective.\n"
-        f"Provide integer scores (1-10) for tool_quality_score, evidence_quality_score, "
-        f"citation_quality_score, and freshness_score.\n"
+        f"Provide integer scores (1-10) strictly following the SCORING RUBRIC above "
+        f"for tool_quality_score, evidence_quality_score, citation_quality_score, and freshness_score.\n"
         f"Expose missing data or hallucinated parameters in your feedback.\n"
         f"Determine if rework is absolutely required. If yes, generate strict actionable instructions. "
         f"If no, draft a synthesis memo.\n\n"
@@ -133,10 +239,16 @@ async def node_evaluator_agent(state: AgentState, config: RunnableConfig = None)
     if effective_needs_rework and rework_limit_reached:
         logger.warning(
             f"    ⚠️ [REWORK LIMIT REACHED] Status is DEFICIENT, but rework limit reached (Cycle {new_rework_count}/{max_rework}). "
-            f"Accepting current response to continue processing."
+            f"Wrapping in fallback template and continuing."
         )
         effective_needs_rework = False
-        evaluation.feedback = f"{evaluation.feedback} [Accepted: max rework cycles reached]"
+        # ─── Fix A: Fallback template thay vì pass raw deficient content ───
+        # Theo §4 llm_evaluation_and_guardrails.md: trả response an toàn đã soạn sẵn
+        # thay vì để user nhận content chưa qua kiểm định.
+        best_effort = state.get("raw_executor_output", "") or evaluation.feedback
+        evaluation.feedback = _FORCED_ACCEPT_FALLBACK_TEMPLATE.format(
+            best_effort_content=best_effort
+        )
         # Flag for Langfuse: human review required — response was deficient but forced through
         _forced_accept = True
 
