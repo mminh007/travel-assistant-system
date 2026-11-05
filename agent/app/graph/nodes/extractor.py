@@ -1,4 +1,5 @@
 # app/graph/nodes/extractor.py
+import asyncio
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -8,6 +9,7 @@ from app.graph.schemas import ExecutorOutput
 from app.graph.utils import update_token_usage
 from app.core.settings import settings
 from app.core.logger import setup_app_logger
+from app.services.background_tasks.rabbitmq_publisher import publish_shadow_eval
 
 logger = setup_app_logger("CognitiveNodes")
 
@@ -32,6 +34,10 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
 
     RESULT: Writes to state['raw_executor_output'] and state['extracted_findings'],
     which are consumed by node_task_manager (no JSON parsing from messages needed).
+
+    SHADOW EVAL: After extraction, publishes a fire-and-forget event to the
+    async shadow eval queue (eval.shadow) for background quality evaluation.
+    This publish call is non-blocking and non-fatal — hot-path is never affected.
     """
     logger.info("==> [PROCESS] FINDING_EXTRACTOR Extracting structured findings from executor output...")
 
@@ -65,6 +71,26 @@ async def node_finding_extractor(state: AgentState, config: RunnableConfig = Non
         raw_summary = executor_raw
         findings = []
         token_update = {}
+
+    # ─── Shadow Eval: fire-and-forget publish ───────────────────────────────
+    # Publish extracted payload to async shadow eval queue (eval.shadow).
+    # asyncio.create_task() ensures this NEVER blocks the hot-path response.
+    # Failure is caught inside publish_shadow_eval and only logged — never raised.
+    tool_observations = [
+        msg.content for msg in state.get("messages", [])
+        if getattr(msg, "type", "") == "tool"
+    ]
+    asyncio.create_task(
+        publish_shadow_eval(
+            session_id=state.get("session_id", ""),
+            trace_id=state.get("langfuse_trace_id", ""),
+            objective=state.get("objective", ""),
+            executor_output=raw_summary,
+            findings=findings,
+            tool_observations=tool_observations,
+            complexity=state.get("complexity", "medium"),
+        )
+    )
 
     return {
         "raw_executor_output": raw_summary,

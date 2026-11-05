@@ -126,7 +126,11 @@ services:
     networks:
       - agent_network
 
-  # ─── CONTAINER 3: ASYNC MEMORY EXTRACTION WORKER ───
+  # ─── CONTAINER 3: BACKGROUND WORKER (Sprint A: renamed from memory_worker) ───
+  # Runs all background consumers via app.worker_main:
+  #   Consumer 1: fact_extraction_queue  → memory extraction (existing)
+  #   Consumer 2: hotel_sync_queue       → hotel data sync (existing)
+  #   Consumer 3: eval.shadow            → async shadow evaluation (new Sprint A)
   memory_worker:
     build: .
     container_name: booking_memory_worker
@@ -139,6 +143,8 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq_broker:5672/
       - QDRANT_SERVER_HOST=qdrant_server
       - QDRANT_SERVER_PORT=6333
+      # Guardrail mode: 'regex' (default, no GPU) | 'classifier' (future, GPU required)
+      - GUARDRAIL_MODE=regex
     env_file:
       - .env
     depends_on:
