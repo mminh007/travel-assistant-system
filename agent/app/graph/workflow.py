@@ -6,15 +6,13 @@ from langgraph.prebuilt import ToolNode
 import hashlib
 from app.graph.state import AgentState
 from app.graph.nodes import (
-    node_input_guardrail, 
+    node_input_guardrail,
     node_travel_react_agent,
     node_planner_agent,
     node_direct_executor_init,
-    node_evaluator_agent,
     node_final_synthesizer,
     node_task_manager,
     node_finding_extractor,
-    node_fact_checker,
     node_support_agent,
     node_clarification_agent,
 )
@@ -101,9 +99,10 @@ def route_from_guardrail(state: AgentState) -> str:
     return "planner"
 
 # ─── PHASE 2: CONFIGURABLE HARD LIMITS ───
-MAX_ITERATIONS   = 8    # Prevent infinite Thought/Action loops within a single task
-MAX_TOOL_CALLS   = 10   # Prevent budget drain across the execution lifecycle
-MAX_REWORK_CYCLES = getattr(settings, "max_rework_cycles", 2)   # Cap Critic Reflection Executor rework loops per task
+MAX_ITERATIONS  = 8    # Prevent infinite Thought/Action loops within a single task
+MAX_TOOL_CALLS  = 10   # Prevent budget drain across the execution lifecycle
+# MAX_REWORK_CYCLES removed — rework loop eliminated in Sprint A.
+# Evaluation is now async (shadow eval worker) + online guardrail (output_guardrail node).
 
 def generate_tool_hash(tool_name: str, args: dict) -> str:
     """Creates a unique deterministic hash for a tool call to detect exact duplicates."""
@@ -169,15 +168,6 @@ async def action_tracker_node(state: AgentState):
         "tool_call_count": tool_call_count
     }
 
-def route_from_evaluator(state: AgentState) -> str:
-    if state.get("needs_rework"):
-        if state.get("rework_count", 0) >= MAX_REWORK_CYCLES:
-            FORCED_TERMINATION_TOTAL.labels(domain="travel_react_agent", reason="max_rework_cycles").inc()
-            logger.warning(f"==> [Evaluator Route] Status DEFICIENT but reached max rework cycles ({MAX_REWORK_CYCLES}). Accepting current response and routing to task_manager.")
-            return "task_manager"
-        return "travel_react_agent"
-    return "task_manager"
-
 def route_from_task_manager(state: AgentState) -> str:
     if state.get("current_task_id") is not None:
         return "travel_react_agent"
@@ -197,13 +187,13 @@ def build_workflow(mcp_tools: list):
     workflow.add_node("travel_react_agent", node_travel_react_agent)
     workflow.add_node("planner", node_planner_agent)
     workflow.add_node("direct_executor_init", node_direct_executor_init)
-    workflow.add_node("evaluator_agent", node_evaluator_agent)
     workflow.add_node("task_manager", node_task_manager)
     workflow.add_node("finding_extractor", node_finding_extractor)
-    workflow.add_node("fact_checker", node_fact_checker)
     workflow.add_node("final_synthesizer", node_final_synthesizer)
     workflow.add_node("support_agent", node_support_agent)
     workflow.add_node("clarification_agent", node_clarification_agent)
+    # NOTE: output_guardrail node will be added in feat/guardrails-ai-output-node.
+    # NOTE: fact_checker + evaluator_agent are now async shadow eval (shadow_eval_worker.py).
 
     workflow.set_entry_point("input_guardrail")
 
@@ -233,18 +223,11 @@ def build_workflow(mcp_tools: list):
     workflow.add_conditional_edges("travel_react_agent", evaluate_tool_hooks, executor_map)
 
     workflow.add_edge("action_tracker", "tools")
-    workflow.add_edge("finding_extractor", "fact_checker")
-    workflow.add_edge("fact_checker", "evaluator_agent")
     workflow.add_edge("tools", "travel_react_agent")
 
-    workflow.add_conditional_edges(
-        "evaluator_agent",
-        route_from_evaluator,
-        {
-            "travel_react_agent": "travel_react_agent",
-            "task_manager": "task_manager"
-        }
-    )
+    # finding_extractor → task_manager (direct edge).
+    # output_guardrail will be inserted between these in feat/guardrails-ai-output-node.
+    workflow.add_edge("finding_extractor", "task_manager")
 
     workflow.add_conditional_edges(
         "task_manager",
