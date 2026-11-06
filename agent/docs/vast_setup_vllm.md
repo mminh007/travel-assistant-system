@@ -126,7 +126,7 @@ source setup_hf.sh
 tmux set -g mouse on 2>/dev/null || true
 
 # ── 1. Start LLM Server first (on clean GPU, VRAM util = 0.50) ──
-VLLM_PORT=18000 VLLM_GPU_UTIL=0.50 \
+VLLM_PORT=18000 VLLM_GPU_UTIL=0.50 VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct-AWQ \
   nohup bash start_awq_kv_fp8.sh > llm.log 2>&1 &
 
 # Follow LLM log — wait until "Application startup complete" (~2-3 mins)

@@ -6,18 +6,37 @@ This guide details execution procedures, test profiles, scenario descriptions, a
 ---
 
 ## 📌 Table of Contents
-1. [Environment Verification & Prerequisites](#1-environment-verification--prerequisites)
-2. [Test Suite Architecture & Dual Protocols (HTTP vs gRPC)](#2-test-suite-architecture--dual-protocols-http-vs-grpc)
-3. [Test Execution Commands](#3-test-execution-commands)
-   - [Scenario 1: Step-Up Load Test (10 → 50 → 100 → 200 VUs) — Core Baseline](#scenario-1-step-up-load-test-10--50--100--200-vus--core-baseline)
-   - [Scenario 2: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs) — Breaking Point](#scenario-2-high-scale-stress-test-300--500--700--1000-vus--breaking-point)
-   - [Scenario 3: Smoke Test (Fast 90s Verification)](#scenario-3-smoke-test-fast-90s-verification)
-   - [Scenario 4: Soak Test (30-Minute Endurance at 50 VUs)](#scenario-4-soak-test-30-minute-endurance-at-50-vus)
-   - [Scenario 5: Spike Test (Instantaneous Burst to 200 VUs)](#scenario-5-spike-test-instantaneous-burst-to-200-vus)
-   - [Scenario 6: Complexity-Isolated Testing (Low / Medium / High)](#scenario-6-complexity-isolated-testing-low--medium--high)
-4. [Real-Time Monitoring Dashboards](#4-real-time-monitoring-dashboards)
-5. [Performance Report Management (HTML & JSON Reports)](#5-performance-report-management-html--json-reports)
-6. [Troubleshooting & Known Bottlenecks](#6-troubleshooting--known-bottlenecks)
+- [🚀 Performance \& Load Testing Execution Guide](#-performance--load-testing-execution-guide)
+  - [Travel Assistant System — Multi-Agent \& Hybrid RAG Stack](#travel-assistant-system--multi-agent--hybrid-rag-stack)
+  - [📌 Table of Contents](#-table-of-contents)
+  - [1. Environment Verification \& Prerequisites](#1-environment-verification--prerequisites)
+    - [Step 1.1: Verify infrastructure containers](#step-11-verify-infrastructure-containers)
+    - [Step 1.2: Launch stack if not yet running](#step-12-launch-stack-if-not-yet-running)
+  - [2. Test Suite Architecture \& Dual Protocols (HTTP vs gRPC)](#2-test-suite-architecture--dual-protocols-http-vs-grpc)
+  - [3. Test Execution Commands](#3-test-execution-commands)
+    - [Scenario 1: Step-Up Load Test (10 → 50 → 100 → 200 VUs) — Core Baseline](#scenario-1-step-up-load-test-10--50--100--200-vus--core-baseline)
+      - [A. Execute for HTTP SSE:](#a-execute-for-http-sse)
+      - [B. Execute for gRPC Streaming:](#b-execute-for-grpc-streaming)
+    - [Scenario 2: High-Scale Stress Test (300 → 500 → 700 → 1000 VUs) — Breaking Point](#scenario-2-high-scale-stress-test-300--500--700--1000-vus--breaking-point)
+      - [1. Continuous high-scale ramp (300 → 500 → 700 → 1000 VUs over ~18 minutes):](#1-continuous-high-scale-ramp-300--500--700--1000-vus-over-18-minutes)
+      - [2. Isolated target VU tiers:](#2-isolated-target-vu-tiers)
+    - [Scenario 3: Smoke Test (Fast 90s Verification)](#scenario-3-smoke-test-fast-90s-verification)
+    - [Scenario 4: Soak Test (30-Minute Endurance at 50 VUs)](#scenario-4-soak-test-30-minute-endurance-at-50-vus)
+    - [Scenario 5: Spike Test (Instantaneous Burst to 200 VUs)](#scenario-5-spike-test-instantaneous-burst-to-200-vus)
+    - [Scenario 6: Complexity-Isolated Testing (Low / Medium / High)](#scenario-6-complexity-isolated-testing-low--medium--high)
+      - [For HTTP SSE:](#for-http-sse)
+      - [For gRPC Streaming:](#for-grpc-streaming)
+  - [4. Real-Time Monitoring Dashboards](#4-real-time-monitoring-dashboards)
+    - [1. Grafana Dashboards](#1-grafana-dashboards)
+    - [2. Prometheus](#2-prometheus)
+  - [5. Performance Report Management (HTML \& JSON Reports)](#5-performance-report-management-html--json-reports)
+    - [File Naming Convention:](#file-naming-convention)
+    - [1. Interactive HTML Reports](#1-interactive-html-reports)
+    - [2. Full 360° Metrics Exporter (k6 Client + vLLM GPU + LangGraph System Metrics)](#2-full-360-metrics-exporter-k6-client--vllm-gpu--langgraph-system-metrics)
+  - [6. Troubleshooting \& Known Bottlenecks](#6-troubleshooting--known-bottlenecks)
+    - [Issue 1: `WARN Request Failed error="request timeout"` at 100–200 VUs](#issue-1-warn-request-failed-errorrequest-timeout-at-100200-vus)
+    - [Issue 2: Aborting an Active Run](#issue-2-aborting-an-active-run)
+    - [Issue 3: Reviewing Server Diagnostic Logs](#issue-3-reviewing-server-diagnostic-logs)
 
 ---
 
@@ -63,14 +82,14 @@ All performance testing assets reside in `agent/load_tests/`:
 
 * **Dual Test Runners:**
 
-| Attribute | HTTP SSE (`travel_perf_test.js`) | gRPC Streaming (`travel_grpc_perf_test.js`) |
-| :--- | :--- | :--- |
-| **Script File** | `load_tests/travel_perf_test.js` | `load_tests/travel_grpc_perf_test.js` |
-| **Docker Compose Service** | `k6_perf_test` | `k6_grpc_perf_test` |
-| **Protocol** | HTTP/1.1 Server-Sent Events (SSE) | HTTP/2 gRPC Streaming (`StreamChat`) |
-| **Target Address** | `http://agent_api:8080/chat/stream` | `agent_grpc:50051` |
-| **Security Validation** | Anonymous Token / User ID Header | Cryptographic ES256 AI Response Receipt verification |
-| **Generated Output** | `reports/http_test_{datetime}.html` & `.json` | `reports/grpc_test_{datetime}.html` & `.json` |
+| Attribute                  | HTTP SSE (`travel_perf_test.js`)              | gRPC Streaming (`travel_grpc_perf_test.js`)          |
+| :------------------------- | :-------------------------------------------- | :--------------------------------------------------- |
+| **Script File**            | `load_tests/travel_perf_test.js`              | `load_tests/travel_grpc_perf_test.js`                |
+| **Docker Compose Service** | `k6_perf_test`                                | `k6_grpc_perf_test`                                  |
+| **Protocol**               | HTTP/1.1 Server-Sent Events (SSE)             | HTTP/2 gRPC Streaming (`StreamChat`)                 |
+| **Target Address**         | `http://agent_api:8080/chat/stream`           | `agent_grpc:50051`                                   |
+| **Security Validation**    | Anonymous Token / User ID Header              | Cryptographic ES256 AI Response Receipt verification |
+| **Generated Output**       | `reports/http_test_{datetime}.html` & `.json` | `reports/grpc_test_{datetime}.html` & `.json`        |
 
 ---
 
@@ -217,7 +236,7 @@ docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=low k6_grpc_perf
 docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=medium k6_grpc_perf_test
 
 # High Complexity:
-docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=high k6_grpc_perf_test
+docker compose --profile perftest run --rm -e COMPLEXITY_FILTER=high -e CACHE_MODE=mixed k6_grpc_perf_test
 ```
 
 ---
