@@ -14,6 +14,9 @@ from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.bootstrap.container import container
 from app.graph import workflow
 from app.services.background_tasks.rabbitmq_publisher import publish_extraction_task
+from app.services.background_tasks.llm_queue_publisher import enqueue_llm_request
+from app.services.job_result_store import wait_for_job, set_job_status
+from redis.asyncio import Redis as AsyncRedis
 from app.core.metrics import (
     AGENT_REQUESTS_TOTAL,
     AGENT_REQUEST_DURATION_SECONDS,
@@ -92,6 +95,17 @@ async def _emit_quality_scores_to_langfuse(
         logger_instance.info("[Langfuse] Eval scores emitted successfully.")
     except Exception as e:
         logger_instance.warning(f"[Langfuse Score Emit] Failed: {e}")
+
+
+def _estimate_queue_wait() -> int:
+    """
+    Conservative static estimate of queue wait time in seconds.
+    Returned to the client immediately when a job is enqueued so it
+    can display a progress indicator.
+    TODO (Sprint B): derive from live LLM_QUEUE_DEPTH metric and
+    measured throughput for a dynamic per-request estimate.
+    """
+    return 30  # seconds
 
 
 class ChatStreamService:
@@ -296,15 +310,74 @@ class ChatStreamService:
                             yield "chunk", last_msg.content
 
         try:
-            if is_anonymous:
-                graph_run = self.graph.compile(name="agent_graph")
-                async for event_type, chunk in run_graph_stream(graph_run):
-                    yield event_type, chunk
+            if settings.use_llm_queue:
+                # ── ASYNC QUEUE PATH (Option C) ────────────────────────────
+                # Determine priority: authenticated users → 2 (normal),
+                # anonymous → 1 (low).  Retried jobs should pass priority=3
+                # from the caller when that logic is added.
+                _priority = 1 if is_anonymous else 2
+
+                # Serialise the prompt as a minimal message list for the worker
+                _messages = [{"role": "user", "content": prompt}]
+
+                # Enqueue and immediately acknowledge receipt to the client
+                job_id = await enqueue_llm_request(
+                    session_id=session_id,
+                    user_id=user_id,
+                    messages=_messages,
+                    tier=2,
+                    priority=_priority,
+                    extra_state={
+                        "current_domain": resolved_domain,
+                        "source": source,
+                    },
+                )
+                # Mark status so result store knows this job exists
+                async with AsyncRedis.from_url(settings.redis.url) as _redis_q:
+                    await set_job_status(_redis_q, job_id, "queued")
+
+                yield "queued", {
+                    "job_id": job_id,
+                    "estimated_wait_seconds": _estimate_queue_wait(),
+                }
+                logger_instance.info(
+                    "==> [StreamService] Job enqueued job_id=%s session=%s priority=%d",
+                    job_id, session_id, _priority,
+                )
+
+                # Long-poll Redis until worker writes the result
+                async with AsyncRedis.from_url(settings.redis.url) as _redis_poll:
+                    result = await wait_for_job(_redis_poll, job_id, timeout=120.0)
+
+                if result is None:
+                    stream_status = "error"
+                    yield "error", f"Job {job_id} timed out waiting for LLM result"
+                    return
+
+                if result.get("status") == "error":
+                    stream_status = "error"
+                    yield "error", result.get("error", "LLM worker error")
+                    return
+
+                ai_full_response_text = result.get("content", "")
+                if not first_chunk_recorded and ai_full_response_text:
+                    first_chunk_recorded = True
+                    AGENT_TTFT_SECONDS.labels(source=source, cache_status="miss").observe(
+                        time.perf_counter() - req_start_ts
+                    )
+                yield "chunk", ai_full_response_text
+
             else:
-                async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
-                    graph_run = self.graph.compile(checkpointer=saver, name="agent_graph")
+                # ── SYNC SEMAPHORE PATH (existing behaviour, unchanged) ────
+                if is_anonymous:
+                    graph_run = self.graph.compile(name="agent_graph")
                     async for event_type, chunk in run_graph_stream(graph_run):
                         yield event_type, chunk
+                else:
+                    async with AsyncRedisSaver(redis_url=settings.redis.url) as saver:
+                        graph_run = self.graph.compile(checkpointer=saver, name="agent_graph")
+                        async for event_type, chunk in run_graph_stream(graph_run):
+                            yield event_type, chunk
 
             if final_state_messages and not is_anonymous:
                 task = asyncio.create_task(publish_extraction_task(user_id, session_id, resolved_domain))
@@ -316,7 +389,7 @@ class ChatStreamService:
                     await container.semantic_cache.set(prompt, ai_full_response_text)
                 except Exception as cache_err:
                     logger_instance.warning(f"==> [StreamService] Semantic cache write failed: {cache_err}")
-                
+
                 receipt = self.generate_receipt(session_id, ai_full_response_text)
                 yield "receipt", receipt
 

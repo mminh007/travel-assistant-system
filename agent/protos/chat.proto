@@ -8,6 +8,19 @@ option csharp_namespace = "AgentApp.Protos";
 service AgentService {
   rpc StreamChat (ChatRequest) returns (stream ChatResponse);
   rpc UpdateProviderConfig (ProviderConfigRequest) returns (ProviderConfigResponse);
+
+  // Option C: Async LLM Queue — poll for a previously enqueued job result.
+  // The client calls this after receiving a "queued" event with a job_id
+  // from StreamChat (when settings.use_llm_queue = True).
+  // Returns a stream that yields a single ChatResponse when the worker
+  // completes, or an error status if the job fails or times out.
+  rpc PollJobResult (PollJobRequest) returns (stream ChatResponse);
+}
+
+// Request message for the PollJobResult RPC.
+message PollJobRequest {
+  string job_id  = 1;  // job_id returned in the "queued" StreamChat event
+  string user_id = 2;  // used for ownership validation in the interceptor
 }
 
 message ChatRequest {

@@ -104,11 +104,21 @@ class QdrantSettings(BaseSettings):
     server_host: str = "localhost"
     server_port: str = "6333"
 
-# RabbitMQ configuration for potential future message queue integrations (search for "RabbitMQSettings" in the codebase for usage contexts)
+# RabbitMQ configuration for message queue integrations (search for "RabbitMQSettings" in the codebase for usage contexts)
 class RabbitMQSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="RABBITMQ_", extra="ignore")
     url: str = "amqp://guest:guest@localhost:5672/"
     queue_name: str = "fact_extraction_queue"
+
+    # --- Option C: LLM Priority Queue ---
+    # Queue name for async LLM job requests (priority queue, x-max-priority=3)
+    llm_requests_queue: str = "llm.requests"
+    llm_requests_dlq:   str = "llm_requests_dlq"
+    llm_requests_dlx:   str = "dlx_llm_exchange"
+    # TTL (seconds) for LLM job results stored in Redis
+    llm_result_ttl:     int = 300
+    # RabbitMQ max-priority level (1=low, 2=normal, 3=high)
+    llm_max_priority:   int = 3
 
 # tool for Tavily integration (placeholder for future expansion) (search for "TavilySettings" in the codebase for usage contexts)
 class TavilySettings(BaseSettings):
@@ -212,6 +222,13 @@ class Settings(BaseSettings):
     # Switch to 'classifier' when GPU infrastructure is available.
     # classifier mode requires: pip install guardrails-ai guardrails-hub
     guardrail_mode: str = "regex"  # 'regex' | 'classifier'
+
+    # --- Option C: Async LLM Queue feature flag ---
+    # False (default): sync semaphore path (existing behaviour, zero UX change)
+    # True           : requests enqueued in RabbitMQ priority queue;
+    #                  client receives job_id and polls via PollJobResult RPC.
+    # Enable only after llm_worker consumer is confirmed running in agent-worker.
+    use_llm_queue: bool = False
     
 @lru_cache()
 def get_settings() -> Settings:

@@ -23,6 +23,8 @@ from app.bootstrap.container import container
 from app.core.helpers.asymmetric_helper import sign_data_es256
 from app.core.helpers.crypto_helper import encrypt_value, decrypt_value
 from app.services.streaming.chat_stream_service import ChatStreamService
+from app.services.job_result_store import wait_for_job
+from redis.asyncio import Redis as AsyncRedis
 
 from prometheus_client import start_http_server
 from app.core.metrics import GRPC_ACTIVE_STREAMS, GRPC_ERRORS_TOTAL
@@ -90,6 +92,56 @@ class AgentServiceServicer(chat_pb2_grpc.AgentServiceServicer):
         finally:
             # METRIC: Decrement stream gauge upon termination
             GRPC_ACTIVE_STREAMS.dec()
+
+    async def PollJobResult(
+        self,
+        request: chat_pb2.PollJobRequest,
+        context: grpc.aio.ServicerContext,
+    ):
+        """
+        Option C: Stream the result of an async LLM job back to the client.
+
+        The client calls this RPC after receiving a "queued" event (with a
+        job_id) from StreamChat when settings.use_llm_queue = True.
+
+        Behaviour:
+        - Polls Redis every 500ms for up to 120s waiting for the LLM worker
+          to write the result.
+        - Yields a single ChatResponse chunk when the job completes.
+        - Returns DEADLINE_EXCEEDED if the job is still pending after 120s.
+        - Returns INTERNAL if the worker reported an error.
+
+        Args:
+            request.job_id:  Identifier returned in the StreamChat queued event.
+            request.user_id: Used by UserOwnershipInterceptor for auth checks.
+        """
+        job_id = request.job_id
+        logger.info("==> [gRPC PollJobResult] Polling job_id=%s user=%s", job_id, request.user_id)
+
+        async with AsyncRedis.from_url(settings.redis.url) as redis:
+            result = await wait_for_job(redis, job_id, timeout=120.0)
+
+        if result is None:
+            context.set_code(grpc.StatusCode.DEADLINE_EXCEEDED)
+            context.set_details(
+                f"Job {job_id} did not complete within 120s. "
+                "The worker may be overloaded — retry shortly."
+            )
+            yield chat_pb2.ChatResponse()
+            return
+
+        if result.get("status") == "error":
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(result.get("error", "LLM worker error"))
+            yield chat_pb2.ChatResponse()
+            return
+
+        content_text = result.get("content", "")
+        logger.info(
+            "==> [gRPC PollJobResult] Done job_id=%s tokens_out=%s",
+            job_id, result.get("output_tokens", "?"),
+        )
+        yield chat_pb2.ChatResponse(chunk=content_text)
 
 from app.grpc_layer.auth_interceptor import UserOwnershipInterceptor
 

@@ -220,3 +220,25 @@ SOFT_STOP_TRIGGER_TOTAL = Counter(
     "Total times soft-stop warning was injected into a node's prompt",
     ["node_name", "reason"],  # reason: low_iterations | low_tools | rework
 )
+
+
+# ==========================================
+# 8. LLM PRIORITY QUEUE METRICS (Option C)
+# ==========================================
+LLM_QUEUE_DEPTH = Gauge(
+    "llm_queue_depth",
+    "Current number of pending LLM jobs in RabbitMQ priority queue",
+)
+
+LLM_QUEUE_WAIT_SECONDS = Histogram(
+    "llm_queue_wait_seconds",
+    "Time a job waited in RabbitMQ queue before being consumed by worker",
+    ["priority"],  # "1" (low) | "2" (normal) | "3" (high)
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0, 60.0, 120.0),
+)
+
+LLM_JOB_PROCESSED_TOTAL = Counter(
+    "llm_job_processed_total",
+    "Total LLM jobs processed by worker",
+    ["status"],  # "ok" | "error" | "timeout"
+)
