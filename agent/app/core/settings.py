@@ -68,7 +68,7 @@ class VllmSettings(BaseSettings):
 
     # Must match --max-model-len of the vLLM instance
     max_completion_tokens: int = 1024
-    max_context_tokens: int = 4096
+    max_context_tokens: int = 8192
 
     # ─── PROCESS 2: Embedding Server (port 8081) ───
     # vast.ai endpoint: http://<host>:<mapped_port>/v1
@@ -104,11 +104,21 @@ class QdrantSettings(BaseSettings):
     server_host: str = "localhost"
     server_port: str = "6333"
 
-# RabbitMQ configuration for potential future message queue integrations (search for "RabbitMQSettings" in the codebase for usage contexts)
+# RabbitMQ configuration for message queue integrations (search for "RabbitMQSettings" in the codebase for usage contexts)
 class RabbitMQSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="RABBITMQ_", extra="ignore")
     url: str = "amqp://guest:guest@localhost:5672/"
     queue_name: str = "fact_extraction_queue"
+
+    # --- Option C: LLM Priority Queue ---
+    # Queue name for async LLM job requests (priority queue, x-max-priority=3)
+    llm_requests_queue: str = "llm.requests"
+    llm_requests_dlq:   str = "llm_requests_dlq"
+    llm_requests_dlx:   str = "dlx_llm_exchange"
+    # TTL (seconds) for LLM job results stored in Redis
+    llm_result_ttl:     int = 300
+    # RabbitMQ max-priority level (1=low, 2=normal, 3=high)
+    llm_max_priority:   int = 3
 
 # tool for Tavily integration (placeholder for future expansion) (search for "TavilySettings" in the codebase for usage contexts)
 class TavilySettings(BaseSettings):
@@ -147,11 +157,11 @@ class NodeTokenLimits(BaseSettings):
     input_guardrail: int = 500  # Increased from 150 to 500 to prevent JSON truncation
     support_agent: int = 500
     planner_agent: int = 600
-    travel_react_agent: int = 800
-    finding_extractor: int = 400
+    travel_react_agent: int = 1200
+    finding_extractor: int = 800  # Increased from 400 to 800 to prevent structured JSON truncation
     fact_checker: int = 1000  # Increased from 300 to 1000 to prevent JSON truncation
     evaluator_agent: int = 400
-    final_synthesizer: int = 1000
+    final_synthesizer: int = 1536
     clarification_agent: int = 200
 
 class GrpcSettings(BaseSettings):
@@ -212,6 +222,13 @@ class Settings(BaseSettings):
     # Switch to 'classifier' when GPU infrastructure is available.
     # classifier mode requires: pip install guardrails-ai guardrails-hub
     guardrail_mode: str = "regex"  # 'regex' | 'classifier'
+
+    # --- Option C: Async LLM Queue feature flag ---
+    # False (default): sync semaphore path (existing behaviour, zero UX change)
+    # True           : requests enqueued in RabbitMQ priority queue;
+    #                  client receives job_id and polls via PollJobResult RPC.
+    # Enable only after llm_worker consumer is confirmed running in agent-worker.
+    use_llm_queue: bool = False
     
 @lru_cache()
 def get_settings() -> Settings:

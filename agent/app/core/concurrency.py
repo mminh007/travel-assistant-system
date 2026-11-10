@@ -15,8 +15,8 @@ These values are intentionally conservative. Tune upward after load testing.
 """
 
 _CONCURRENCY = {
-    "nine_router": {"tier1": 8, "tier2": 8},
-    "vllm":        {"tier1": 12, "tier2": 4},
+    "nine_router": {"tier1": 8,  "tier2": 8},
+    "vllm":        {"tier1": 24, "tier2": 24},
     "claude":      {"tier1": 4,  "tier2": 2},
 }
 

@@ -7,6 +7,8 @@ from app.core.settings import settings
 from app.services import MemoryWorker
 from app.services.background_tasks.hotel_sync_handler import process_hotel_sync_message
 from app.services.background_tasks.shadow_eval_worker import run_shadow_eval_worker
+from app.services.background_tasks.llm_worker import run_llm_worker
+from redis.asyncio import Redis as AsyncRedis
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container, _resolve_active_collections
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -124,7 +126,16 @@ async def main():
         # Uses asyncio.create_task() to avoid blocking the main connection loop.
         asyncio.create_task(run_shadow_eval_worker())
 
-        logger.info("🎧 Consumers active: [fact_extraction_queue] + [hotel_sync_queue] + [eval.shadow]\n")
+        # ─── Consumer 4 (New): LLM Priority Queue (Option C, Sprint B) ───
+        # Pulls from llm.requests priority queue and calls invoke_llm_with_limit().
+        # Result is written to Redis (llm_result:{job_id}) for the gRPC handler
+        # to stream back to the client via PollJobResult RPC.
+        # Only meaningful when settings.use_llm_queue = True (feature flag).
+        # Uses a dedicated Redis client scoped to this worker process lifetime.
+        _llm_redis = AsyncRedis.from_url(settings.redis.url)
+        asyncio.create_task(run_llm_worker(_llm_redis))
+
+        logger.info("🎧 Consumers active: [fact_extraction_queue] + [hotel_sync_queue] + [eval.shadow] + [llm.requests]\n")
         await asyncio.Future()
 
 if __name__ == "__main__":

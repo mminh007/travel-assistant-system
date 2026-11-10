@@ -40,7 +40,7 @@ async def node_planner_agent(state: AgentState, config: RunnableConfig = None):
 
         tasks_state = [
             {"id": t.id, "desc": t.description, "status": "pending", "result": None, "findings": []}
-            for t in plan.tasks
+            for t in plan.tasks[:4]
         ]
         logger.info(f"==> [Planner] Generated {len(tasks_state)} tasks successfully.")
         token_update = update_token_usage(state, usage, node_name="planner_agent")

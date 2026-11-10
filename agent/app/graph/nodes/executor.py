@@ -175,8 +175,8 @@ async def node_travel_react_agent(state: AgentState, config: RunnableConfig = No
 
     compiled_messages = prune_messages_by_token_limit(
         compiled_messages,
-        provider_cfg.max_context_tokens,
-        provider_cfg.tier2_balanced_model
+        max(1024, provider_cfg.max_context_tokens - settings.node_limits.travel_react_agent - 900),
+        provider_cfg.tier2_balanced_model or getattr(provider_cfg, "model", "gpt-4o")
     )
 
     current_iteration = state.get("iteration_count", 0) + 1

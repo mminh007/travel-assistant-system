@@ -44,6 +44,11 @@ class AgentServiceStub:
                 request_serializer=chat__pb2.ProviderConfigRequest.SerializeToString,
                 response_deserializer=chat__pb2.ProviderConfigResponse.FromString,
                 _registered_method=True)
+        self.PollJobResult = channel.unary_stream(
+                '/chat.AgentService/PollJobResult',
+                request_serializer=chat__pb2.PollJobRequest.SerializeToString,
+                response_deserializer=chat__pb2.ChatResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer:
@@ -61,6 +66,17 @@ class AgentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PollJobResult(self, request, context):
+        """Option C: Async LLM Queue — poll for a previously enqueued job result.
+        The client calls this after receiving a "queued" event with a job_id
+        from StreamChat (when settings.use_llm_queue = True).
+        Returns a stream that yields a single ChatResponse when the worker
+        completes, or an error status if the job fails or times out.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +89,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.UpdateProviderConfig,
                     request_deserializer=chat__pb2.ProviderConfigRequest.FromString,
                     response_serializer=chat__pb2.ProviderConfigResponse.SerializeToString,
+            ),
+            'PollJobResult': grpc.unary_stream_rpc_method_handler(
+                    servicer.PollJobResult,
+                    request_deserializer=chat__pb2.PollJobRequest.FromString,
+                    response_serializer=chat__pb2.ChatResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +150,33 @@ class AgentService:
             '/chat.AgentService/UpdateProviderConfig',
             chat__pb2.ProviderConfigRequest.SerializeToString,
             chat__pb2.ProviderConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PollJobResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/chat.AgentService/PollJobResult',
+            chat__pb2.PollJobRequest.SerializeToString,
+            chat__pb2.ChatResponse.FromString,
             options,
             channel_credentials,
             insecure,
