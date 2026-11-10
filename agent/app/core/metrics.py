@@ -41,14 +41,14 @@ AGENT_REQUEST_DURATION_SECONDS = Histogram(
     "agent_request_duration_seconds",
     "End-to-end duration of agent chat requests in seconds",
     ["source", "status"],
-    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.5, 5.0, 7.5, 10.0, 15.0, 25.0, 40.0, 60.0),
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.5, 5.0, 7.5, 10.0, 15.0, 25.0, 40.0, 60.0, 90.0, 120.0, 180.0),
 )
 
 AGENT_TTFT_SECONDS = Histogram(
     "agent_time_to_first_token_seconds",
     "User-perceived Time To First Token (seconds from request arrival to first streamed response chunk)",
     ["source", "cache_status"],  # cache_status=hit|miss
-    buckets=(0.02, 0.05, 0.1, 0.2, 0.4, 0.75, 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 20.0),
+    buckets=(0.02, 0.05, 0.1, 0.2, 0.4, 0.75, 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 20.0, 30.0, 45.0, 60.0),
 )
 
 # ==========================================
@@ -58,14 +58,14 @@ NODE_DURATION_SECONDS = Histogram(
     "agent_node_duration_seconds",
     "Execution duration of individual LangGraph nodes in seconds",
     ["node_name"],
-    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.5, 5.0, 8.0, 12.0, 20.0),
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.5, 5.0, 8.0, 12.0, 20.0, 30.0, 45.0, 60.0),
 )
 
 LLM_CALL_DURATION_SECONDS = Histogram(
     "agent_llm_call_duration_seconds",
     "Duration of individual LLM inference calls (including semaphore wait) per node and tier",
     ["node_name", "tier", "status"],  # status=ok|truncated|error
-    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 15.0, 30.0),
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 1.5, 2.5, 4.0, 6.0, 10.0, 15.0, 30.0, 45.0, 60.0),
 )
 
 LLM_CALL_ERRORS_TOTAL = Counter(
@@ -169,7 +169,7 @@ NODE_INPUT_TOKENS = Histogram(
     "agent_node_input_tokens",
     "Distribution of input token counts per graph node (max_context_tokens=4096)",
     ["node_name", "tier"],
-    buckets=(100, 250, 500, 800, 1200, 1600, 2048, 2800, 3500, 4096),
+    buckets=(100, 250, 500, 800, 1200, 1600, 2048, 2800, 3500, 4096, 6000, 8192),
 )
 
 NODE_OUTPUT_TOKENS = Histogram(

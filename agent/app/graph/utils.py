@@ -67,22 +67,45 @@ def update_token_usage(state: AgentState, usage, node_name: str = "unknown") -> 
     }
 
 def prune_messages_by_token_limit(messages: list, max_tokens: int, model_name: str) -> list:
-    """Ensures message history strictly respects context window boundaries."""
+    """Ensures message history strictly respects context window boundaries while preserving SystemMessage and initial HumanMessage."""
+    if not messages:
+        return messages
     try:
         encoding = tiktoken.encoding_for_model(model_name)
     except KeyError:
         encoding = tiktoken.get_encoding("o200k_base")
 
-    total_tokens = 0
+    def _msg_tokens(m) -> int:
+        content = m.content if isinstance(m.content, str) else str(m.content or "")
+        extra = str(getattr(m, "tool_calls", "") or "")
+        return len(encoding.encode(content)) + len(encoding.encode(extra)) + 8
+
+    # Always reserve space for leading SystemMessage and initial HumanMessage if present
+    pinned_prefix = []
+    idx = 0
+    if idx < len(messages) and getattr(messages[idx], "type", "") == "system":
+        pinned_prefix.append(messages[idx])
+        idx += 1
+    if idx < len(messages) and getattr(messages[idx], "type", "") == "human":
+        pinned_prefix.append(messages[idx])
+        idx += 1
+
+    rest_msgs = messages[idx:]
+    total_tokens = sum(_msg_tokens(m) for m in pinned_prefix)
+
     keep_messages = []
-    for msg in reversed(messages):
-        content = msg.content if isinstance(msg.content, str) else ""
-        msg_tokens = len(encoding.encode(content))
-        if total_tokens + msg_tokens > max_tokens:
+    for msg in reversed(rest_msgs):
+        msg_tok = _msg_tokens(msg)
+        if total_tokens + msg_tok > max_tokens and keep_messages:
             break
         keep_messages.insert(0, msg)
-        total_tokens += msg_tokens
-    return keep_messages
+        total_tokens += msg_tok
+
+    # Drop any leading ToolMessages whose parent AIMessage was pruned
+    while keep_messages and getattr(keep_messages[0], "type", "") == "tool":
+        keep_messages.pop(0)
+
+    return pinned_prefix + keep_messages
 
 def _build_task_context(state: AgentState) -> str:
     """

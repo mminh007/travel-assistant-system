@@ -7,6 +7,8 @@ from app.core.settings import settings
 from app.services import MemoryWorker
 from app.services.background_tasks.hotel_sync_handler import process_hotel_sync_message
 from app.services.background_tasks.shadow_eval_worker import run_shadow_eval_worker
+from app.services.background_tasks.llm_worker import run_llm_worker
+from redis.asyncio import Redis as AsyncRedis
 from app.core.logger import setup_app_logger
 from app.bootstrap.container import container, _resolve_active_collections
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver

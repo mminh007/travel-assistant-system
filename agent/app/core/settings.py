@@ -68,7 +68,7 @@ class VllmSettings(BaseSettings):
 
     # Must match --max-model-len of the vLLM instance
     max_completion_tokens: int = 1024
-    max_context_tokens: int = 4096
+    max_context_tokens: int = 8192
 
     # ─── PROCESS 2: Embedding Server (port 8081) ───
     # vast.ai endpoint: http://<host>:<mapped_port>/v1
@@ -157,11 +157,11 @@ class NodeTokenLimits(BaseSettings):
     input_guardrail: int = 500  # Increased from 150 to 500 to prevent JSON truncation
     support_agent: int = 500
     planner_agent: int = 600
-    travel_react_agent: int = 800
-    finding_extractor: int = 400
+    travel_react_agent: int = 1200
+    finding_extractor: int = 800  # Increased from 400 to 800 to prevent structured JSON truncation
     fact_checker: int = 1000  # Increased from 300 to 1000 to prevent JSON truncation
     evaluator_agent: int = 400
-    final_synthesizer: int = 1000
+    final_synthesizer: int = 1536
     clarification_agent: int = 200
 
 class GrpcSettings(BaseSettings):

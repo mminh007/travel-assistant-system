@@ -8,7 +8,7 @@ MODEL="${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}"
 PORT="${VLLM_PORT:-18000}"
 KV_DTYPE="${KV_CACHE_DTYPE:-auto}"
 GPU_UTIL="${VLLM_GPU_UTIL:-0.50}"
-echo "[vLLM] Starting Production LLM — Model: $MODEL | port=$PORT | max-len=4096 | gpu-util=$GPU_UTIL | kv-dtype=$KV_DTYPE"
+echo "[vLLM] Starting Production LLM — Model: $MODEL | port=$PORT | max-len=8192 | gpu-util=$GPU_UTIL | kv-dtype=$KV_DTYPE"
 
 # TOOL PARSER NOTE:
 # Official vLLM and Alibaba Qwen documentation requires '--tool-call-parser hermes' for all
@@ -20,10 +20,10 @@ vllm serve "$MODEL" \
   --dtype float16 \
   --quantization awq_marlin \
   --kv-cache-dtype "$KV_DTYPE" \
-  --max-model-len 4096 \
+  --max-model-len 8192 \
   --gpu-memory-utilization "$GPU_UTIL" \
   --enable-chunked-prefill \
-  --max-num-batched-tokens 512 \
+  --max-num-batched-tokens 1024 \
   --enable-prefix-caching \
   --max-num-seqs 64 \
   --enable-auto-tool-choice \
